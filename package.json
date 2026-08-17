@@ -5,6 +5,7 @@
   "description": "Платформо-независимое ядро генерации листингов + адаптер под Etsy",
   "main": "src/core/generateListing.js",
   "scripts": {
+    "start": "node src/server/server.js",
     "server": "node src/server/server.js",
     "test-cli": "node test-cli.js"
   },
