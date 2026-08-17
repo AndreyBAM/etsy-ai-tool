@@ -227,9 +227,23 @@
     border-radius:100px;
   }
 
-  #loading{ display:none; margin-top:20px; font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14px; }
+  #loading{ display:none; margin-top:20px; font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14px; align-items:center; }
+  #loading.active{ display:flex; }
   #loading .dot{ animation: blink 1.2s infinite; }
   @keyframes blink{ 0%,100%{opacity:.25} 50%{opacity:1} }
+
+  .spinner{
+    display:inline-block;
+    width:16px;
+    height:16px;
+    border:2px solid rgba(35,32,25,0.15);
+    border-top-color: var(--thread);
+    border-radius:50%;
+    animation: spin 0.7s linear infinite;
+    margin-right:8px;
+    flex-shrink:0;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
 
   #paywall{
     display:none;
@@ -255,6 +269,7 @@
   @media (prefers-reduced-motion: reduce){
     .btn, .copy-btn{ transition:none; }
     #loading .dot{ animation:none; }
+    .spinner{ animation:none; }
   }
 </style>
 </head>
@@ -286,7 +301,7 @@
     <div class="error" id="errorBox"></div>
   </form>
 
-  <div id="loading">Writing your listing<span class="dot">...</span></div>
+  <div id="loading"><span class="spinner"></span>Writing your listing<span class="dot">...</span></div>
 
   <div id="result">
     <div class="result-card">
