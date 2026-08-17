@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turn your listing into native English — free</title>
+<style>
+  :root{
+    --paper:#F2ECE0;
+    --paper-dark:#E6DCC8;
+    --ink:#232019;
+    --ink-soft:#5B5548;
+    --thread:#B8402E;
+    --thread-dark:#8F2E20;
+    --tag:#3F6E5C;
+    --line: rgba(35,32,25,0.14);
+    --radius: 4px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family: 'Iowan Old Style','Georgia','Times New Roman',serif;
+    line-height:1.5;
+    min-height:100vh;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(35,32,25,0.05) 1px, transparent 0);
+    background-size: 18px 18px;
+  }
+  .util{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  .wrap{
+    max-width:720px;
+    margin:0 auto;
+    padding:56px 22px 120px;
+  }
+  .tagline{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:11px;
+    color:var(--thread);
+    font-weight:700;
+    margin-bottom:18px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .tagline::before{
+    content:"";
+    width:22px;height:1px;background:var(--thread);display:inline-block;
+  }
+  h1{
+    font-size:clamp(28px,5vw,42px);
+    line-height:1.12;
+    margin:0 0 18px;
+    font-weight:400;
+    letter-spacing:-0.01em;
+  }
+  h1 em{
+    font-style:normal;
+    color:var(--thread-dark);
+    border-bottom:2px solid var(--thread);
+  }
+  .sub{
+    font-size:18px;
+    color:var(--ink-soft);
+    max-width:52ch;
+    margin:0 0 40px;
+  }
+
+  /* the "tag" motif — a hero visual made of an actual before/after Etsy tag */
+  .tagcard{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow: 0 1px 0 rgba(35,32,25,.05), 0 12px 24px -16px rgba(35,32,25,.35);
+    padding:0;
+    margin-bottom:44px;
+    overflow:hidden;
+  }
+  .tagcard-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  @media (max-width:560px){ .tagcard-row{grid-template-columns:1fr;} }
+  .tagcard-col{
+    padding:22px 24px;
+  }
+  .tagcard-col + .tagcard-col{
+    border-left:1px dashed var(--line);
+  }
+  @media (max-width:560px){
+    .tagcard-col + .tagcard-col{ border-left:none; border-top:1px dashed var(--line);}
+  }
+  .tagcard-label{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    font-weight:700;
+    margin-bottom:10px;
+  }
+  .tagcard-col.before .tagcard-label{color:var(--ink-soft);}
+  .tagcard-col.after .tagcard-label{color:var(--tag);}
+  .tagcard-text{
+    font-size:15px;
+    color:var(--ink-soft);
+  }
+  .tagcard-col.before .tagcard-text{ font-style:italic; }
+  .tagcard-col.after .tagcard-text{ color:var(--ink); }
+
+  form{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:26px;
+    box-shadow: 0 1px 0 rgba(35,32,25,.05), 0 16px 30px -20px rgba(35,32,25,.4);
+  }
+  label{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-weight:700;
+    color:var(--ink-soft);
+    display:block;
+    margin-bottom:10px;
+  }
+  textarea{
+    width:100%;
+    min-height:130px;
+    resize:vertical;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:16px;
+    padding:14px;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--paper);
+    color:var(--ink);
+  }
+  textarea:focus{ outline:2px solid var(--thread); outline-offset:1px; }
+
+  .btn{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:var(--thread);
+    color:#fff;
+    border:none;
+    padding:14px 22px;
+    font-size:15px;
+    font-weight:700;
+    border-radius:var(--radius);
+    cursor:pointer;
+    margin-top:16px;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .btn:hover{ background:var(--thread-dark); }
+  .btn:active{ transform:translateY(1px); }
+  .btn:disabled{ background:#B8AFA0; cursor:not-allowed; }
+  .btn.secondary{
+    background:transparent;
+    color:var(--thread-dark);
+    border:1.5px solid var(--thread);
+  }
+  .btn.secondary:hover{ background:rgba(184,64,46,.08); }
+
+  .counter{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:14px;
+  }
+
+  .error{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    color:var(--thread-dark);
+    font-size:14px;
+    margin-top:14px;
+    display:none;
+  }
+
+  #result{ margin-top:34px; display:none; }
+  .result-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    margin-bottom:14px;
+  }
+  .result-label{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    font-weight:700;
+    color:var(--tag);
+    margin-bottom:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .copy-btn{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:11px;
+    padding:4px 9px;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .copy-btn:hover{ background:var(--paper); }
+  .result-title{ font-size:19px; }
+  .result-desc{ font-size:15px; white-space:pre-wrap; color:var(--ink-soft); }
+  .tags-list{ display:flex; flex-wrap:wrap; gap:8px; }
+  .tag-pill{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:12.5px;
+    background:var(--paper-dark);
+    border:1px solid var(--line);
+    padding:5px 10px;
+    border-radius:100px;
+  }
+
+  #loading{ display:none; margin-top:20px; font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14px; }
+  #loading .dot{ animation: blink 1.2s infinite; }
+  @keyframes blink{ 0%,100%{opacity:.25} 50%{opacity:1} }
+
+  #paywall{
+    display:none;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:28px 26px;
+    text-align:center;
+    margin-top:20px;
+  }
+  #paywall h3{ margin:0 0 8px; font-size:22px; font-weight:400; }
+  #paywall p{ font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14.5px; margin:0 0 18px; }
+
+  footer{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-align:center;
+    margin-top:56px;
+    opacity:.7;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .btn, .copy-btn{ transition:none; }
+    #loading .dot{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="tagline">Etsy listing rewriter</div>
+  <h1 id="headline">Selling on Etsy, but English isn't your <em>first language</em>?</h1>
+  <p class="sub" id="subheadline">Describe your product in your own language — get a ready English title, description, and 13 tags for Etsy. No translating, no prompting, no copy-pasting.</p>
+
+  <div class="tagcard">
+    <div class="tagcard-row">
+      <div class="tagcard-col before">
+        <div class="tagcard-label">What you type</div>
+        <div class="tagcard-text">"наручники з дерева, ручна робота, для весілля, підходить для подарунка"</div>
+      </div>
+      <div class="tagcard-col after">
+        <div class="tagcard-label">What you get</div>
+        <div class="tagcard-text">"Handmade Wooden Bracelet — Rustic Wedding Gift, Natural Boho Jewelry for Her"</div>
+      </div>
+    </div>
+  </div>
+
+  <form id="genForm">
+    <label for="rawText">Describe your product — any language is fine</label>
+    <textarea id="rawText" placeholder="Type or paste your product description here, in your own language..." required></textarea>
+    <button type="submit" class="btn" id="genBtn">Create my Etsy listing</button>
+    <div class="counter" id="counter"></div>
+    <div class="error" id="errorBox"></div>
+  </form>
+
+  <div id="loading">Writing your listing<span class="dot">...</span></div>
+
+  <div id="result">
+    <div class="result-card">
+      <div class="result-label">Title</div>
+      <div class="result-title" id="outTitle"></div>
+    </div>
+    <div class="result-card">
+      <div class="result-label">Description</div>
+      <div class="result-desc" id="outDesc"></div>
+    </div>
+    <div class="result-card">
+      <div class="result-label">13 Tags</div>
+      <div class="tags-list" id="outTags"></div>
+    </div>
+    <button class="btn secondary" id="anotherBtn">Try another listing</button>
+  </div>
+
+  <div id="paywall">
+    <h3>You've used your 3 free listings</h3>
+    <p>Get 20 more Etsy listings rewritten into native English for $5.</p>
+    <a class="btn" id="payBtn" href="#" target="_blank" rel="noopener">Get 20 listings — $5</a>
+  </div>
+
+  <footer>Free tool · No account needed · Your text is only used to generate your listing</footer>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

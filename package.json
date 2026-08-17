@@ -1,0 +1,14 @@
+{
+  "name": "etsy-extension-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Платформо-независимое ядро генерации листингов + адаптер под Etsy",
+  "main": "src/core/generateListing.js",
+  "scripts": {
+    "server": "node src/server/server.js",
+    "test-cli": "node test-cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
