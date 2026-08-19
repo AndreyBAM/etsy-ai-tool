@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Turn your listing into native English — free</title>
+<title>Etsy listenizi doğal İngilizceye çevirin — ücretsiz</title>
 <style>
   :root{
     --paper:#F2ECE0;
@@ -276,56 +276,56 @@
 <body>
 <div class="wrap">
 
-  <div class="tagline">Etsy listing rewriter</div>
-  <h1 id="headline">Selling on Etsy, but English isn't your <em>first language</em>?</h1>
-  <p class="sub" id="subheadline">Describe your product in your own language — get a ready English title, description, and 13 tags for Etsy. No translating, no prompting, no copy-pasting.</p>
+  <div class="tagline">Etsy liste dönüştürücü</div>
+  <h1 id="headline">Etsy'de satış yapıyorsunuz, ama İngilizce <em>ana diliniz</em> değil mi?</h1>
+  <p class="sub" id="subheadline">Ürününüzü kendi dilinizde anlatın — hazır İngilizce başlık, açıklama ve Etsy için 13 etiket alın. Çeviri yok, prompt yazmak yok, kopyala-yapıştır yok.</p>
 
   <div class="tagcard">
     <div class="tagcard-row">
       <div class="tagcard-col before">
-        <div class="tagcard-label">What you type</div>
-        <div class="tagcard-text">"наручники з дерева, ручна робота, для весілля, підходить для подарунка"</div>
+        <div class="tagcard-label">Siz ne yazarsınız</div>
+        <div class="tagcard-text">"ahşap bileklik, el yapımı, düğün hediyesi"</div>
       </div>
       <div class="tagcard-col after">
-        <div class="tagcard-label">What you get</div>
+        <div class="tagcard-label">Siz ne alırsınız</div>
         <div class="tagcard-text">"Handmade Wooden Bracelet — Rustic Wedding Gift, Natural Boho Jewelry for Her"</div>
       </div>
     </div>
   </div>
 
   <form id="genForm">
-    <label for="rawText">Describe your product — any language is fine</label>
-    <textarea id="rawText" placeholder="Type or paste your product description here, in your own language..." required></textarea>
-    <button type="submit" class="btn" id="genBtn">Create my Etsy listing</button>
+    <label for="rawText">Ürününüzü anlatın — hangi dilde olursa olsun</label>
+    <textarea id="rawText" placeholder="Ürün açıklamanızı buraya kendi dilinizde yazın veya yapıştırın..." required></textarea>
+    <button type="submit" class="btn" id="genBtn">Etsy listemi oluştur</button>
     <div class="counter" id="counter"></div>
     <div class="error" id="errorBox"></div>
   </form>
 
-  <div id="loading"><span class="spinner"></span>Writing your listing<span class="dot">...</span></div>
+  <div id="loading"><span class="spinner"></span>Listeniz yazılıyor<span class="dot">...</span></div>
 
   <div id="result">
     <div class="result-card">
-      <div class="result-label">Title</div>
+      <div class="result-label">Başlık</div>
       <div class="result-title" id="outTitle"></div>
     </div>
     <div class="result-card">
-      <div class="result-label">Description</div>
+      <div class="result-label">Açıklama</div>
       <div class="result-desc" id="outDesc"></div>
     </div>
     <div class="result-card">
-      <div class="result-label">13 Tags</div>
+      <div class="result-label">13 Etiket</div>
       <div class="tags-list" id="outTags"></div>
     </div>
-    <button class="btn secondary" id="anotherBtn">Try another listing</button>
+    <button class="btn secondary" id="anotherBtn">Başka bir liste dene</button>
   </div>
 
   <div id="paywall">
-    <h3>You've used your 3 free listings</h3>
-    <p>Get 20 more Etsy listings rewritten into native English for $5.</p>
-    <a class="btn" id="payBtn" href="#" target="_blank" rel="noopener">Get 20 listings — $5</a>
+    <h3>3 ücretsiz listenizi kullandınız</h3>
+    <p>5 dolara 20 Etsy listesi daha doğal İngilizceye çevrilsin.</p>
+    <a class="btn" id="payBtn" href="#" target="_blank" rel="noopener">20 liste al — $5</a>
   </div>
 
-  <footer>Free tool · No account needed · Your text is only used to generate your listing</footer>
+  <footer>Ücretsiz araç · Hesap gerekmez · Metniniz yalnızca listenizi oluşturmak için kullanılır</footer>
 </div>
 
 <script src="/app.js"></script>
