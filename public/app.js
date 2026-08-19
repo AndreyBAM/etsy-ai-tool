@@ -11,16 +11,16 @@
 // --- 3 варианта заголовков, привязанные к вариантам объявлений ---
 const VARIANTS = {
   1: {
-    headline: 'Selling on Etsy, but English isn\'t your <em>first language</em>?',
-    sub: 'Describe your product in your own language — get a ready English title, description, and 13 tags for Etsy. No translating, no prompting, no copy-pasting.',
+    headline: 'Etsy\'de satış yapıyorsunuz, ama İngilizce <em>ana diliniz</em> değil mi?',
+    sub: 'Ürününüzü kendi dilinizde anlatın — hazır İngilizce başlık, açıklama ve Etsy için 13 etiket alın. Çeviri yok, prompt yazmak yok, kopyala-yapıştır yok.',
   },
   2: {
-    headline: 'Still writing Etsy listings through ChatGPT <em>by hand</em>?',
-    sub: 'No more copying text back and forth between tabs. Describe your product → get a ready-to-post Etsy listing in seconds.',
+    headline: 'Hâlâ Etsy listelerinizi ChatGPT ile <em>elle</em> mi yazıyorsunuz?',
+    sub: 'Sekmeler arasında metin kopyalamayı bırakın. Ürününüzü anlatın → saniyeler içinde hazır bir Etsy listesi alın.',
   },
   3: {
-    headline: 'Does your English hold you back from <em>selling on Etsy</em>?',
-    sub: 'Create natural, native-sounding English titles, descriptions, and tags — even if your English isn\'t strong.',
+    headline: 'İngilizceniz <em>Etsy\'de satış yapmanıza</em> engel mi oluyor?',
+    sub: 'İngilizceniz güçlü olmasa bile doğal, native gibi görünen başlıklar, açıklamalar ve etiketler oluşturun.',
   },
 };
 
@@ -60,9 +60,9 @@ const counterEl = document.getElementById('counter');
 function setCounter(remaining) {
   if (remaining === null || remaining === undefined) { counterEl.textContent = ''; return; }
   if (remaining > 0) {
-    counterEl.textContent = remaining + ' free listing' + (remaining === 1 ? '' : 's') + ' left';
+    counterEl.textContent = remaining + ' ücretsiz liste hakkınız kaldı';
   } else {
-    counterEl.textContent = 'No free listings left';
+    counterEl.textContent = 'Ücretsiz liste hakkınız kalmadı';
   }
 }
 
@@ -100,7 +100,7 @@ form.addEventListener('submit', async (e) => {
     }
 
     if (!res.ok) {
-      throw new Error(data.error || 'Something went wrong');
+      throw new Error(data.error || 'Bir şeyler yanlış gitti');
     }
 
     document.getElementById('outTitle').textContent = data.title;
@@ -116,7 +116,7 @@ form.addEventListener('submit', async (e) => {
     resultBox.style.display = 'block';
     setCounter(data.remaining);
   } catch (err) {
-    errorBox.textContent = 'Error: ' + err.message + '. Please try again.';
+    errorBox.textContent = 'Hata: ' + err.message + '. Lütfen tekrar deneyin.';
     errorBox.style.display = 'block';
   } finally {
     genBtn.disabled = false;
