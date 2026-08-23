@@ -47,6 +47,10 @@ const STATIC_FILES = {
   '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
   '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
+  '/terms.html': { file: 'terms.html', type: 'text/html; charset=utf-8' },
+  '/privacy.html': { file: 'privacy.html', type: 'text/html; charset=utf-8' },
+  '/refund.html': { file: 'refund.html', type: 'text/html; charset=utf-8' },
+  '/pricing.html': { file: 'pricing.html', type: 'text/html; charset=utf-8' },
 };
 
 const server = http.createServer(async (req, res) => {
