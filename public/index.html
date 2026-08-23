@@ -264,7 +264,13 @@
     text-align:center;
     margin-top:56px;
     opacity:.7;
+    line-height:1.8;
   }
+  footer a{
+    color:var(--ink-soft);
+    text-decoration:underline;
+  }
+  footer a:hover{ color:var(--thread-dark); }
 
   @media (prefers-reduced-motion: reduce){
     .btn, .copy-btn{ transition:none; }
@@ -325,7 +331,10 @@
     <a class="btn" id="payBtn" href="#" target="_blank" rel="noopener">20 liste al — $5</a>
   </div>
 
-  <footer>Ücretsiz araç · Hesap gerekmez · Metniniz yalnızca listenizi oluşturmak için kullanılır</footer>
+  <footer>
+    Ücretsiz araç · Hesap gerekmez · Metniniz yalnızca listenizi oluşturmak için kullanılır<br>
+    <a href="/pricing.html">Fiyatlandırma</a> · <a href="/terms.html">Kullanım Şartları</a> · <a href="/privacy.html">Gizlilik</a> · <a href="/refund.html">İade Politikası</a>
+  </footer>
 </div>
 
 <script src="/app.js"></script>
