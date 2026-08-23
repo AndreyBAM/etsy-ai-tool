@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiyatlandırma — EtsyAI Tool</title>
+<style>
+  :root{
+    --paper:#F2ECE0;
+    --ink:#232019;
+    --ink-soft:#5B5548;
+    --thread:#B8402E;
+    --thread-dark:#8F2E20;
+    --tag:#3F6E5C;
+    --line: rgba(35,32,25,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Iowan Old Style','Georgia','Times New Roman',serif;
+    line-height:1.6;
+    margin:0;
+  }
+  .wrap{ max-width:720px; margin:0 auto; padding:56px 22px 100px; }
+  a{ color:var(--thread-dark); }
+  .back{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:var(--thread);
+    text-decoration:none;
+    display:inline-block;
+    margin-bottom:30px;
+  }
+  h1{ font-size:32px; font-weight:400; margin:0 0 12px; }
+  .sub{ font-family:'Helvetica Neue',Arial,sans-serif; font-size:16px; color:var(--ink-soft); margin-bottom:44px; }
+  .plans{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:560px){ .plans{ grid-template-columns:1fr; } }
+  .plan{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:26px 24px;
+  }
+  .plan.highlight{ border:1.5px solid var(--thread); }
+  .plan-name{ font-family:'Helvetica Neue',Arial,sans-serif; font-size:12px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color:var(--tag); margin-bottom:14px; }
+  .plan-price{ font-size:34px; margin-bottom:6px; }
+  .plan-price span{ font-family:'Helvetica Neue',Arial,sans-serif; font-size:14px; color:var(--ink-soft); }
+  .plan-desc{ font-family:'Helvetica Neue',Arial,sans-serif; font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
+  .plan ul{ padding-left:18px; margin:0; }
+  .plan li{ font-family:'Helvetica Neue',Arial,sans-serif; font-size:14.5px; color:var(--ink-soft); margin-bottom:8px; }
+  .note{ font-family:'Helvetica Neue',Arial,sans-serif; font-size:13px; color:var(--ink-soft); margin-top:34px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Ana sayfaya dön</a>
+  <h1>Fiyatlandırma</h1>
+  <p class="sub">Basit, tek seferlik fiyatlandırma. Abonelik yok, gizli ücret yok.</p>
+
+  <div class="plans">
+    <div class="plan">
+      <div class="plan-name">Ücretsiz</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-desc">Kredi kartı gerekmez</div>
+      <ul>
+        <li>3 ücretsiz liste oluşturma hakkı</li>
+        <li>İngilizce başlık, açıklama ve 13 etiket</li>
+        <li>Hangi dilde yazarsanız yazın</li>
+        <li>Hesap oluşturmaya gerek yok</li>
+      </ul>
+    </div>
+    <div class="plan highlight">
+      <div class="plan-name">20 Liste Paketi</div>
+      <div class="plan-price">$5</div>
+      <div class="plan-desc">Tek seferlik ödeme</div>
+      <ul>
+        <li>20 ek liste oluşturma hakkı</li>
+        <li>İngilizce başlık, açıklama ve 13 etiket</li>
+        <li>Son kullanma tarihi yok</li>
+        <li>Güvenli ödeme (Paddle ile işlenir)</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="note">Tüm ödemeler satıcı kaydımız Paddle.com Market Limited tarafından güvenli şekilde işlenir. Sorularınız için: <a href="mailto:farscipe77@gmail.com">farscipe77@gmail.com</a></p>
+</div>
+</body>
+</html>
