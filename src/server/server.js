@@ -18,28 +18,73 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { generateListing } = require('../core/generateListing');
 
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 
 // --- воронка demand-теста ---------------------------------------------
-// Ссылка на оплату (LemonSqueezy/Gumroad checkout URL). Настраивается
-// через .env, чтобы не хардкодить и не пересобирать на каждое изменение.
-const PAYMENT_URL = process.env.PAYMENT_URL || 'https://example.com/checkout';
 // Сколько бесплатных генераций даём одному анонимному uid до пейволла.
 const FREE_LIMIT = parseInt(process.env.FREE_LIMIT || '3', 10);
 
-// Простой счётчик в памяти процесса. НЕ переживает рестарт сервера —
+// Сколько генераций начисляем за одну успешную оплату Paddle (продукт
+// "20 Etsy listings — $5"). Если цена/пакет когда-нибудь изменится —
+// поменять здесь.
+const CREDITS_PER_PURCHASE = parseInt(process.env.CREDITS_PER_PURCHASE || '20', 10);
+
+// Секретный ключ webhook-а Paddle (Developer Tools → Notifications →
+// открыть destination → Secret key). Нужен, чтобы убедиться, что
+// запрос на /api/paddle-webhook реально пришёл от Paddle, а не от
+// кого угодно в интернете, кто узнал наш URL.
+const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
+
+// Простые счётчики в памяти процесса. НЕ переживают рестарт сервера —
 // это осознанное упрощение для короткого (несколько дней) demand-теста.
 // Если тест приживётся и понадобится собирать историю дольше — здесь же
 // заменить Map на Supabase (TODO из плана, раздел 6).
-const usage = new Map(); // uid -> count
+const usage = new Map(); // uid -> сколько генераций уже использовано всего
+const paidCredits = new Map(); // uid -> сколько платных генераций начислено (кумулятивно)
+const processedTransactions = new Set(); // transaction.id, чтобы не начислить дважды при повторной доставке webhook-а
 
 function logEvent(name, data) {
   // Дешёвая замена полноценной аналитике на время теста: события видно
   // прямо в логах хостинга (Railway/Render). Один event = одна строка.
   console.log(`[event] ${name}`, JSON.stringify(data));
+}
+
+function allowedFor(uid) {
+  return FREE_LIMIT + (paidCredits.get(uid) || 0);
+}
+
+function remainingFor(uid) {
+  const used = usage.get(uid) || 0;
+  return Math.max(0, allowedFor(uid) - used);
+}
+
+// --- проверка подписи webhook-а Paddle ---------------------------------
+// Paddle подписывает каждый webhook заголовком Paddle-Signature вида
+// "ts=1700000000;h1=<hex-hmac>". Подпись считается как
+// HMAC-SHA256(secret, `${ts}:${rawBody}`), где rawBody — ТОЧНО тот же
+// текст, что пришёл в теле запроса (поэтому читаем raw, а не парсим
+// JSON заранее).
+function verifyPaddleSignature(rawBody, signatureHeader, secret) {
+  if (!signatureHeader || !secret) return false;
+  const parts = Object.fromEntries(
+    signatureHeader.split(';').map((p) => p.split('='))
+  );
+  const ts = parts.ts;
+  const h1 = parts.h1;
+  if (!ts || !h1) return false;
+
+  const signedPayload = `${ts}:${rawBody}`;
+  const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
+
+  // timingSafeEqual требует буферы одинаковой длины
+  const a = Buffer.from(expected, 'hex');
+  const b = Buffer.from(h1, 'hex');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
@@ -80,13 +125,58 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // --- сколько бесплатных генераций осталось у этого uid ---
+  // --- сколько генераций осталось у этого uid (бесплатных + оплаченных) ---
   if (req.method === 'GET' && url.pathname === '/api/usage') {
     const uid = url.searchParams.get('uid') || 'anonymous';
-    const used = usage.get(uid) || 0;
-    const remaining = Math.max(0, FREE_LIMIT - used);
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ remaining }));
+    return res.end(JSON.stringify({ remaining: remainingFor(uid) }));
+  }
+
+  // --- webhook от Paddle: сюда Paddle сам стучится после успешной оплаты ---
+  if (req.method === 'POST' && url.pathname === '/api/paddle-webhook') {
+    let rawBody;
+    try {
+      rawBody = await readRawBody(req);
+    } catch (err) {
+      res.writeHead(400);
+      return res.end('Bad body');
+    }
+
+    const signatureHeader = req.headers['paddle-signature'];
+    const isValid = verifyPaddleSignature(rawBody, signatureHeader, PADDLE_WEBHOOK_SECRET);
+
+    if (!isValid) {
+      logEvent('webhook_invalid_signature', {});
+      res.writeHead(401);
+      return res.end('Invalid signature');
+    }
+
+    let event;
+    try {
+      event = JSON.parse(rawBody);
+    } catch (err) {
+      res.writeHead(400);
+      return res.end('Invalid JSON');
+    }
+
+    // Нас интересует только успешно завершённая оплата.
+    if (event.event_type === 'transaction.completed') {
+      const txId = event.data && event.data.id;
+      const customData = (event.data && event.data.custom_data) || {};
+      const uid = customData.uid;
+
+      if (txId && !processedTransactions.has(txId) && uid) {
+        processedTransactions.add(txId);
+        paidCredits.set(uid, (paidCredits.get(uid) || 0) + CREDITS_PER_PURCHASE);
+        logEvent('payment_completed', { uid, txId, creditsAdded: CREDITS_PER_PURCHASE });
+      } else {
+        logEvent('webhook_skipped', { txId, uid, reason: !uid ? 'no_uid' : 'duplicate' });
+      }
+    }
+
+    // Paddle ждёт 200 OK в ответ — иначе будет повторять доставку.
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ received: true }));
   }
 
   if (req.method !== 'POST' || url.pathname !== '/api/generate') {
@@ -104,10 +194,10 @@ const server = http.createServer(async (req, res) => {
     const uid = body.uid || 'anonymous';
 
     const used = usage.get(uid) || 0;
-    if (used >= FREE_LIMIT) {
+    if (used >= allowedFor(uid)) {
       logEvent('paywall_hit', { uid, variant: body.variant });
       res.writeHead(402, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'limit_reached', paymentUrl: PAYMENT_URL }));
+      return res.end(JSON.stringify({ error: 'limit_reached' }));
     }
 
     // TODO(после demand-теста): заменить Map на Supabase, если тест
@@ -124,11 +214,10 @@ const server = http.createServer(async (req, res) => {
     );
 
     usage.set(uid, used + 1);
-    const remaining = Math.max(0, FREE_LIMIT - (used + 1));
-    logEvent('generated', { uid, variant: body.variant, remaining });
+    logEvent('generated', { uid, variant: body.variant, remaining: remainingFor(uid) });
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ...listing, remaining }));
+    res.end(JSON.stringify({ ...listing, remaining: remainingFor(uid) }));
   } catch (err) {
     console.error(err);
     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -151,7 +240,23 @@ function readJsonBody(req) {
   });
 }
 
+// Отдельно от readJsonBody: возвращает СЫРОЙ текст тела запроса без
+// парсинга. Нужен для проверки подписи webhook-а Paddle — HMAC
+// считается именно по исходным байтам, а не по JSON.parse/stringify
+// версии (которая может отличаться порядком ключей/пробелами).
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk) => (data += chunk));
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
 server.listen(PORT, () => {
   console.log(`Backend proxy listening on http://localhost:${PORT}`);
-  console.log(`Free limit: ${FREE_LIMIT} generations. Payment URL: ${PAYMENT_URL}`);
+  console.log(`Free limit: ${FREE_LIMIT} generations. Credits per purchase: ${CREDITS_PER_PURCHASE}.`);
+  if (!PADDLE_WEBHOOK_SECRET) {
+    console.warn('WARNING: PADDLE_WEBHOOK_SECRET not set — payments will not be credited automatically.');
+  }
 });
