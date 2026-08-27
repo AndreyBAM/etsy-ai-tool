@@ -33,6 +33,26 @@ const VARIANTS = {
   }
 })();
 
+// --- Paddle checkout (overlay) ---
+// Client-side token — публичный, безопасно хранить прямо в коде фронтенда
+// (в отличие от ANTHROPIC_API_KEY, который остаётся только на сервере).
+const PADDLE_TOKEN = 'live_12ecdcebbf1137f9b667aa1e554';
+const PADDLE_PRICE_ID = 'pri_01m0jph2vm9zakjq5m7w4qas58'; // "20 Etsy listings — $5"
+
+if (window.Paddle) {
+  Paddle.Initialize({ token: PADDLE_TOKEN });
+}
+
+document.getElementById('payBtn').addEventListener('click', () => {
+  if (!window.Paddle) {
+    alert('Ödeme sistemi yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin.');
+    return;
+  }
+  Paddle.Checkout.open({
+    items: [{ priceId: PADDLE_PRICE_ID, quantity: 1 }],
+  });
+});
+
 // --- анонимный идентификатор пользователя (не требует регистрации) ---
 function getUid() {
   let uid = localStorage.getItem('etsy_tool_uid');
@@ -94,7 +114,6 @@ form.addEventListener('submit', async (e) => {
     if (res.status === 402) {
       // лимит бесплатных генераций исчерпан
       paywallBox.style.display = 'block';
-      document.getElementById('payBtn').href = data.paymentUrl || '#';
       setCounter(0);
       return;
     }
