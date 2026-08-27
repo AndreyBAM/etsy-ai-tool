@@ -33,6 +33,17 @@ const VARIANTS = {
   }
 })();
 
+// --- анонимный идентификатор пользователя (не требует регистрации) ---
+function getUid() {
+  let uid = localStorage.getItem('etsy_tool_uid');
+  if (!uid) {
+    uid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+    localStorage.setItem('etsy_tool_uid', uid);
+  }
+  return uid;
+}
+const uid = getUid();
+
 // --- Paddle checkout (overlay) ---
 // Client-side token — публичный, безопасно хранить прямо в коде фронтенда
 // (в отличие от ANTHROPIC_API_KEY, который остаётся только на сервере).
@@ -48,21 +59,13 @@ document.getElementById('payBtn').addEventListener('click', () => {
     alert('Ödeme sistemi yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin.');
     return;
   }
+  // uid передаётся в custom_data, чтобы webhook на сервере знал,
+  // какому анонимному пользователю начислить 20 генераций после оплаты.
   Paddle.Checkout.open({
     items: [{ priceId: PADDLE_PRICE_ID, quantity: 1 }],
+    customData: { uid },
   });
 });
-
-// --- анонимный идентификатор пользователя (не требует регистрации) ---
-function getUid() {
-  let uid = localStorage.getItem('etsy_tool_uid');
-  if (!uid) {
-    uid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-    localStorage.setItem('etsy_tool_uid', uid);
-  }
-  return uid;
-}
-const uid = getUid();
 
 // UTM/variant passthrough so the server can log which ad drove the action
 function currentVariant() {
