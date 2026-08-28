@@ -39,13 +39,52 @@ const CREDITS_PER_PURCHASE = parseInt(process.env.CREDITS_PER_PURCHASE || '20', 
 // кого угодно в интернете, кто узнал наш URL.
 const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
 
-// Простые счётчики в памяти процесса. НЕ переживают рестарт сервера —
-// это осознанное упрощение для короткого (несколько дней) demand-теста.
-// Если тест приживётся и понадобится собирать историю дольше — здесь же
-// заменить Map на Supabase (TODO из плана, раздел 6).
+// Простые счётчики в памяти процесса, дополнительно сохраняемые на диск
+// (см. loadState/saveState ниже), чтобы переживать рестарты и передеплои
+// Railway. Если тест приживётся и понадобится собирать историю дольше —
+// здесь же заменить на Supabase (TODO из плана, раздел 6).
 const usage = new Map(); // uid -> сколько генераций уже использовано всего
 const paidCredits = new Map(); // uid -> сколько платных генераций начислено (кумулятивно)
 const processedTransactions = new Set(); // transaction.id, чтобы не начислить дважды при повторной доставке webhook-а
+
+// --- персистентность на диск -------------------------------------------
+// Railway по умолчанию стирает файловую систему при каждом передеплое —
+// ЗА ИСКЛЮЧЕНИЕМ директории, примонтированной как persistent Volume.
+// DATA_DIR должен указывать именно на такую директорию (см. инструкцию
+// по добавлению Volume в Railway → Settings → Volumes, mount path /data).
+const DATA_DIR = process.env.DATA_DIR || '/data';
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+
+function loadState() {
+  try {
+    const raw = fs.readFileSync(STATE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    (parsed.usage || []).forEach(([k, v]) => usage.set(k, v));
+    (parsed.paidCredits || []).forEach(([k, v]) => paidCredits.set(k, v));
+    (parsed.processedTransactions || []).forEach((id) => processedTransactions.add(id));
+    console.log(`State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits.`);
+  } catch (err) {
+    console.log(`No existing state file at ${STATE_FILE} (this is normal on first run). Starting fresh.`);
+  }
+}
+
+function saveState() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const data = {
+      usage: [...usage.entries()],
+      paidCredits: [...paidCredits.entries()],
+      processedTransactions: [...processedTransactions],
+    };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(data));
+  } catch (err) {
+    // Если Volume не подключен, запись может не сработать — не роняем
+    // сервер из-за этого, но громко предупреждаем в логах.
+    console.error('Failed to save state to disk:', err.message);
+  }
+}
+
+loadState();
 
 function logEvent(name, data) {
   // Дешёвая замена полноценной аналитике на время теста: события видно
@@ -168,6 +207,7 @@ const server = http.createServer(async (req, res) => {
       if (txId && !processedTransactions.has(txId) && uid) {
         processedTransactions.add(txId);
         paidCredits.set(uid, (paidCredits.get(uid) || 0) + CREDITS_PER_PURCHASE);
+        saveState();
         logEvent('payment_completed', { uid, txId, creditsAdded: CREDITS_PER_PURCHASE });
       } else {
         logEvent('webhook_skipped', { txId, uid, reason: !uid ? 'no_uid' : 'duplicate' });
@@ -214,6 +254,7 @@ const server = http.createServer(async (req, res) => {
     );
 
     usage.set(uid, used + 1);
+    saveState();
     logEvent('generated', { uid, variant: body.variant, remaining: remainingFor(uid) });
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
