@@ -49,9 +49,31 @@ const uid = getUid();
 // (в отличие от ANTHROPIC_API_KEY, который остаётся только на сервере).
 const PADDLE_TOKEN = 'live_12ecdcebbf1137f9b667aa1e554';
 const PADDLE_PRICE_ID = 'pri_01m0jph2vm9zakjq5m7w4qas58'; // "20 Etsy listings — $5"
+const PURCHASE_VALUE = 5.00;
+const PURCHASE_CURRENCY = 'USD';
+
+// Флаг, чтобы случайно не отправить Purchase дважды на одно и то же событие
+// (Paddle иногда может прислать checkout.completed повторно при повторном рендере overlay).
+let purchaseFired = false;
 
 if (window.Paddle) {
-  Paddle.Initialize({ token: PADDLE_TOKEN });
+  Paddle.Initialize({
+    token: PADDLE_TOKEN,
+    eventCallback: function (event) {
+      // Ловим именно завершение оплаты внутри overlay — это самый надёжный
+      // клиентский сигнал "деньги реально прошли" для Meta Pixel.
+      if (event.name === 'checkout.completed' && !purchaseFired) {
+        purchaseFired = true;
+        if (window.fbq) {
+          fbq('track', 'Purchase', {
+            value: PURCHASE_VALUE,
+            currency: PURCHASE_CURRENCY,
+            content_name: '20 Etsy listings',
+          });
+        }
+      }
+    },
+  });
 }
 
 document.getElementById('payBtn').addEventListener('click', () => {
@@ -59,6 +81,9 @@ document.getElementById('payBtn').addEventListener('click', () => {
     alert('Ödeme sistemi yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin.');
     return;
   }
+  // Сбрасываем флаг перед каждым новым открытием чекаута, чтобы повторная
+  // покупка (например, ещё через 20 генераций) тоже отследилась как Purchase.
+  purchaseFired = false;
   // uid передаётся в custom_data, чтобы webhook на сервере знал,
   // какому анонимному пользователю начислить 20 генераций после оплаты.
   Paddle.Checkout.open({
