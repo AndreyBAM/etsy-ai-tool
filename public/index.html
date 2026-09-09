@@ -82,7 +82,7 @@
     max-width:52ch;
     margin:0 0 40px;
   }
- 
+
   /* the "tag" motif — a hero visual made of an actual before/after Etsy tag */
   .tagcard{
     background:#fff;
@@ -123,7 +123,7 @@
   }
   .tagcard-col.before .tagcard-text{ font-style:italic; }
   .tagcard-col.after .tagcard-text{ color:var(--ink); }
- 
+
   form{
     background:#fff;
     border:1px solid var(--line);
@@ -154,7 +154,7 @@
     color:var(--ink);
   }
   textarea:focus{ outline:2px solid var(--thread); outline-offset:1px; }
- 
+
   .btn{
     font-family:'Helvetica Neue',Arial,sans-serif;
     display:inline-flex;
@@ -180,14 +180,14 @@
     border:1.5px solid var(--thread);
   }
   .btn.secondary:hover{ background:rgba(184,64,46,.08); }
- 
+
   .counter{
     font-family:'Helvetica Neue',Arial,sans-serif;
     font-size:12px;
     color:var(--ink-soft);
     margin-top:14px;
   }
- 
+
   .error{
     font-family:'Helvetica Neue',Arial,sans-serif;
     color:var(--thread-dark);
@@ -195,7 +195,7 @@
     margin-top:14px;
     display:none;
   }
- 
+
   #result{ margin-top:34px; display:none; }
   .result-card{
     background:#fff;
@@ -238,12 +238,12 @@
     padding:5px 10px;
     border-radius:100px;
   }
- 
+
   #loading{ display:none; margin-top:20px; font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14px; align-items:center; }
   #loading.active{ display:flex; }
   #loading .dot{ animation: blink 1.2s infinite; }
   @keyframes blink{ 0%,100%{opacity:.25} 50%{opacity:1} }
- 
+
   .spinner{
     display:inline-block;
     width:16px;
@@ -256,7 +256,7 @@
     flex-shrink:0;
   }
   @keyframes spin{ to{ transform:rotate(360deg); } }
- 
+
   #paywall{
     display:none;
     background:#fff;
@@ -268,7 +268,7 @@
   }
   #paywall h3{ margin:0 0 8px; font-size:22px; font-weight:400; }
   #paywall p{ font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14.5px; margin:0 0 18px; }
- 
+
   footer{
     font-family:'Helvetica Neue',Arial,sans-serif;
     font-size:12px;
@@ -290,7 +290,7 @@
     text-decoration:underline;
   }
   footer a:hover{ color:var(--thread-dark); }
- 
+
   @media (prefers-reduced-motion: reduce){
     .btn, .copy-btn{ transition:none; }
     #loading .dot{ animation:none; }
@@ -300,14 +300,14 @@
 </head>
 <body>
 <div class="wrap">
- 
+
   <div class="brand">
     <img src="logo-tag.png" alt="EtsyAI Tool logosu">
   </div>
   <div class="tagline">Etsy liste dönüştürücü</div>
   <h1 id="headline">Etsy'de satış yapıyorsunuz, ama İngilizce <em>ana diliniz</em> değil mi?</h1>
   <p class="sub" id="subheadline">Ürününüzü kendi dilinizde anlatın — hazır İngilizce başlık, açıklama ve Etsy için 13 etiket alın. Çeviri yok, prompt yazmak yok, kopyala-yapıştır yok.</p>
- 
+
   <div class="tagcard">
     <div class="tagcard-row">
       <div class="tagcard-col before">
@@ -320,7 +320,7 @@
       </div>
     </div>
   </div>
- 
+
   <form id="genForm">
     <label for="rawText">Ürününüzü anlatın — hangi dilde olursa olsun</label>
     <textarea id="rawText" placeholder="Ürün açıklamanızı buraya kendi dilinizde yazın veya yapıştırın..." required></textarea>
@@ -328,9 +328,9 @@
     <div class="counter" id="counter"></div>
     <div class="error" id="errorBox"></div>
   </form>
- 
+
   <div id="loading"><span class="spinner"></span>Listeniz yazılıyor<span class="dot">...</span></div>
- 
+
   <div id="result">
     <div class="result-card">
       <div class="result-label">Başlık</div>
@@ -346,22 +346,21 @@
     </div>
     <button class="btn secondary" id="anotherBtn">Başka bir liste dene</button>
   </div>
- 
+
   <div id="paywall">
     <h3>3 ücretsiz listenizi kullandınız</h3>
     <p>5 dolara 20 Etsy listesi daha doğal İngilizceye çevrilsin.</p>
     <button class="btn" id="payBtn" type="button">20 liste al — $5</button>
   </div>
- 
+
   <footer>
     <img src="logo-tag.png" alt="EtsyAI Tool">
     Ücretsiz araç · Hesap gerekmez · Metniniz yalnızca listenizi oluşturmak için kullanılır<br>
     <a href="/pricing.html">Fiyatlandırma</a> · <a href="/terms.html">Kullanım Şartları</a> · <a href="/privacy.html">Gizlilik</a> · <a href="/refund.html">İade Politikası</a>
   </footer>
 </div>
- 
+
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
- 
