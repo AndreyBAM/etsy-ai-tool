@@ -135,6 +135,8 @@ const STATIC_FILES = {
   '/privacy.html': { file: 'privacy.html', type: 'text/html; charset=utf-8' },
   '/refund.html': { file: 'refund.html', type: 'text/html; charset=utf-8' },
   '/pricing.html': { file: 'pricing.html', type: 'text/html; charset=utf-8' },
+  '/favicon.png': { file: 'favicon.png', type: 'image/png' },
+  '/logo-tag.png': { file: 'logo-tag.png', type: 'image/png' },
 };
 
 const server = http.createServer(async (req, res) => {
@@ -301,14 +303,3 @@ server.listen(PORT, () => {
     console.warn('WARNING: PADDLE_WEBHOOK_SECRET not set — payments will not be credited automatically.');
   }
 });
-const STATIC_FILES = {
-  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
-  '/terms.html': { file: 'terms.html', type: 'text/html; charset=utf-8' },
-  '/privacy.html': { file: 'privacy.html', type: 'text/html; charset=utf-8' },
-  '/refund.html': { file: 'refund.html', type: 'text/html; charset=utf-8' },
-  '/pricing.html': { file: 'pricing.html', type: 'text/html; charset=utf-8' },
-  '/favicon.png': { file: 'favicon.png', type: 'image/png' },
-  '/logo-tag.png': { file: 'logo-tag.png', type: 'image/png' },
-};
