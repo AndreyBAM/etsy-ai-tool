@@ -10,6 +10,15 @@
  * без npm install. Когда дойдёте до реального деплоя на Vercel/Railway,
  * это легко переносится в serverless-функцию.
  *
+ * v2 (сентябрь 2026):
+ *  - статика теперь раздаётся автоматически по расширению файла
+ *    (см. MIME_TYPES/serveStatic ниже), вместо ручного списка
+ *    STATIC_FILES — тот список уже дважды "терял" новый файл
+ *    (favicon.png, logo-tag.png), потому что про него забывали
+ *    зарегистрировать вручную.
+ *  - добавлен /api/feedback — короткий опрос после каждой генерации
+ *    ("текста хватило, чтобы сразу опубликовать, или доработали бы?").
+ *
  * Запуск:
  *   ANTHROPIC_API_KEY=sk-ant-... node src/server/server.js
  * ---------------------------------------------------------------------
@@ -46,6 +55,7 @@ const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
 const usage = new Map(); // uid -> сколько генераций уже использовано всего
 const paidCredits = new Map(); // uid -> сколько платных генераций начислено (кумулятивно)
 const processedTransactions = new Set(); // transaction.id, чтобы не начислить дважды при повторной доставке webhook-а
+const feedback = []; // [{uid, rating, email, timestamp}] — короткий опрос после каждой генерации
 
 // --- персистентность на диск -------------------------------------------
 // Railway по умолчанию стирает файловую систему при каждом передеплое —
@@ -62,7 +72,8 @@ function loadState() {
     (parsed.usage || []).forEach(([k, v]) => usage.set(k, v));
     (parsed.paidCredits || []).forEach(([k, v]) => paidCredits.set(k, v));
     (parsed.processedTransactions || []).forEach((id) => processedTransactions.add(id));
-    console.log(`State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits.`);
+    (parsed.feedback || []).forEach((f) => feedback.push(f));
+    console.log(`State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits, ${feedback.length} feedback entries.`);
   } catch (err) {
     console.log(`No existing state file at ${STATE_FILE} (this is normal on first run). Starting fresh.`);
   }
@@ -75,6 +86,7 @@ function saveState() {
       usage: [...usage.entries()],
       paidCredits: [...paidCredits.entries()],
       processedTransactions: [...processedTransactions],
+      feedback,
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data));
   } catch (err) {
@@ -127,17 +139,68 @@ function verifyPaddleSignature(rawBody, signatureHeader, secret) {
 }
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
-const STATIC_FILES = {
-  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
-  '/terms.html': { file: 'terms.html', type: 'text/html; charset=utf-8' },
-  '/privacy.html': { file: 'privacy.html', type: 'text/html; charset=utf-8' },
-  '/refund.html': { file: 'refund.html', type: 'text/html; charset=utf-8' },
-  '/pricing.html': { file: 'pricing.html', type: 'text/html; charset=utf-8' },
-  '/favicon.png': { file: 'favicon.png', type: 'image/png' },
-  '/logo-tag.png': { file: 'logo-tag.png', type: 'image/png' },
+
+// --- автоматическая раздача статики -------------------------------------
+// Раньше здесь был ручной список STATIC_FILES, в который нужно было
+// вписывать КАЖДЫЙ новый файл вручную — это уже дважды приводило к тому,
+// что новый файл (favicon.png, logo-tag.png) тихо не находился на
+// проде, хотя физически лежал в public/. Теперь: если у запрошенного
+// пути есть известное расширение — отдаём файл из public/ напрямую,
+// определяя Content-Type по расширению. Новые файлы в public/ больше
+// нигде регистрировать не нужно.
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8',
 };
+
+/**
+ * Пытается отдать статический файл из public/ по расширению пути.
+ * Возвращает true, если запрос был обработан (файл найден и отдан,
+ * либо отдана 404 именно за файл), false — если путь вообще не
+ * похож на статический файл (нет распознанного расширения), и его
+ * должен обработать кто-то другой (например, /api/usage).
+ *
+ * @param {string} pathname
+ * @param {import('http').ServerResponse} res
+ * @returns {boolean}
+ */
+function serveStatic(pathname, res) {
+  const filePath = pathname === '/' ? '/index.html' : pathname;
+
+  // Защита от path traversal (../../etc/passwd и т.п.). Главная гарантия —
+  // финальная проверка fullPath.startsWith(PUBLIC_DIR) ниже; regex тут —
+  // только первая, самая дешёвая линия защиты.
+  const safePath = path.normalize(filePath).replace(/^([.]{2}[/\\])+/, '');
+  const fullPath = path.join(PUBLIC_DIR, safePath);
+  if (!fullPath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return true;
+  }
+
+  const ext = path.extname(fullPath).toLowerCase();
+  const type = MIME_TYPES[ext];
+  if (!type) return false; // не похоже на статический файл — пропускаем дальше по цепочке роутов
+
+  fs.readFile(fullPath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Not found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': type });
+    res.end(data);
+  });
+  return true;
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -153,17 +216,10 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // --- статика лендинга ---
-  if (req.method === 'GET' && STATIC_FILES[url.pathname]) {
-    const { file, type } = STATIC_FILES[url.pathname];
-    return fs.readFile(path.join(PUBLIC_DIR, file), (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        return res.end('Failed to load ' + file);
-      }
-      res.writeHead(200, { 'Content-Type': type });
-      res.end(data);
-    });
+  // --- статика лендинга (автоматически, по расширению файла) ---
+  if (req.method === 'GET') {
+    const handled = serveStatic(url.pathname, res);
+    if (handled) return;
   }
 
   // --- сколько генераций осталось у этого uid (бесплатных + оплаченных) ---
@@ -221,6 +277,27 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ received: true }));
   }
 
+  // --- короткий фидбек после генерации: "текста хватило или нет?" + email ---
+  if (req.method === 'POST' && url.pathname === '/api/feedback') {
+    try {
+      const body = await readJsonBody(req);
+      const entry = {
+        uid: body.uid || 'anonymous',
+        rating: body.rating || null, // 'good' | 'minor_edits' | 'rewrite'
+        email: body.email || null,
+        timestamp: new Date().toISOString(),
+      };
+      feedback.push(entry);
+      saveState();
+      logEvent('feedback_submitted', entry);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: err.message }));
+    }
+  }
+
   if (req.method !== 'POST' || url.pathname !== '/api/generate') {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'Not found' }));
@@ -249,7 +326,7 @@ const server = http.createServer(async (req, res) => {
       {
         rawText: body.rawText,
         sourceLang: body.sourceLang, // необязательно — если не передано, Claude определит язык сам
-        category: body.category,
+        category: body.category, // необязательно — выпадающий список на лендинге, можно оставить пустым
         extraContext: body.extraContext,
       },
       { apiKey: API_KEY, marketplace: body.marketplace || 'etsy' }
@@ -257,7 +334,12 @@ const server = http.createServer(async (req, res) => {
 
     usage.set(uid, used + 1);
     saveState();
-    logEvent('generated', { uid, variant: body.variant, remaining: remainingFor(uid) });
+    logEvent('generated', {
+      uid,
+      variant: body.variant,
+      category: body.category || null,
+      remaining: remainingFor(uid),
+    });
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ...listing, remaining: remainingFor(uid) }));
