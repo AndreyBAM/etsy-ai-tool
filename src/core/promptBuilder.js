@@ -8,6 +8,11 @@
  * Если в будущем понадобится другая площадка (eBay, Amazon Handmade) —
  * этот файл менять не нужно. Меняется только marketplaceProfile,
  * который передаётся сюда как параметр (см. marketplaceProfiles.js).
+ *
+ * v2 (сентябрь 2026): вместо одного заголовка и одного описания модель
+ * теперь возвращает 3 варианта заголовка и 2 варианта описания —
+ * гипотеза: часть продавцов отваливалась после 1 генерации отчасти
+ * из-за ощущения "слишком мало вывода за одну попытку".
  * ---------------------------------------------------------------------
  */
 
@@ -26,7 +31,8 @@
  * @property {string} [sourceLang] - язык ввода, например "uk" (украинский). Необязательный —
  *   если не передан, Claude сам определит язык по тексту. Поддерживается ЛЮБОЙ язык на входе,
  *   список языков нигде не захардкожен и не ограничен.
- * @property {string} [category] - категория товара, если известна (например "handmade jewelry")
+ * @property {string} [category] - категория товара, если известна (например "Jewelry").
+ *   Необязательное поле — если продавец не выбрал категорию в форме, просто не передаётся.
  * @property {string} [extraContext] - доп. контекст: материал, размер, для кого подарок и т.п.
  */
 
@@ -39,22 +45,27 @@
  */
 function buildSystemPrompt(profile) {
   return `You are an expert e-commerce copywriter who specializes in ${profile.name} listings.
+
 Your job is NOT to translate word-for-word. Your job is to rewrite the seller's product description
 so it reads like it was written by a native English-speaking seller who deeply understands how buyers
 on ${profile.name} actually search and shop.
 
 Context about the platform's buyers: ${profile.audienceNote}
 
-The seller may write their input in ANY language (Ukrainian, Turkish, Vietnamese, Indonesian, Polish, or any other language). If the input language isn't stated, detect it yourself from the text. Regardless of the input language, your output (title, tags, description) must always be in natural, native-sounding English — that is the one and only output language, because that is what the platform's search and buyers overwhelmingly use.
+The seller may write their input in ANY language (Ukrainian, Turkish, Vietnamese, Indonesian, Polish, or any other language). If the input language isn't stated, detect it yourself from the text. Regardless of the input language, your output (titles, tags, descriptions) must always be in natural, native-sounding English — that is the one and only output language, because that is what the platform's search and buyers overwhelmingly use.
+
+If the seller specified a product category, use it to sharpen how buyers in that specific category actually search and what they care about (e.g. jewelry buyers care about materials and sizing; home decor buyers care about room/style fit) — but never invent category-specific facts the seller didn't state.
 
 Rules:
 1. Preserve every factual detail from the seller's input (materials, size, color, what it is, who it's for). Never invent facts that weren't given.
 2. CRITICAL — never add unverifiable claims about origin, authenticity, certification, eco-friendliness, or safety that the seller did not state. For example, if the seller wrote "amber" but did not say "Baltic amber" or "certified" or "genuine", do NOT add those words yourself; if the seller described a natural material but never said "eco-friendly" or "sustainable" or "non-toxic", do NOT add those claims either. This also applies to material/technique specificity: if the seller gave a general term (e.g. "ceramic", "wood", "fabric") but did not name a more precise technical variant (e.g. "stoneware", "walnut", "linen"), do NOT upgrade to the more specific term yourself — keep the general word the seller actually used. On marketplaces like Etsy, unverified claims (especially about gemstones, materials, safety, or environmental impact) can get a seller's listing removed or their account suspended. When in doubt, use the more neutral, literal term the seller actually used instead of a stronger unverified one.
-3. Write a title under ${profile.maxTitleLength} characters, front-loaded with the most likely buyer search terms.
+3. Write exactly 3 DISTINCT title options, each under ${profile.maxTitleLength} characters, each front-loaded with the most likely buyer search terms. The 3 titles must take genuinely different angles, not just reworded synonyms of each other — for example: (a) a literal, keyword-first title optimized purely for search, (b) a benefit- or style-led title that leads with why a buyer would want it, (c) a gift/occasion-led title if the product plausibly fits a gift context, otherwise another distinct practical angle (use case, room, recipient). All 3 must stay 100% factually accurate to the seller's input.
 4. CRITICAL — tag diversity, checked by counting, not by impression: treat any grammatical variant of the same root (e.g. "mug"/"mugs", "wallet"/"wallets", "necklace"/"necklaces") as ONE keyword. Across all ${profile.maxTags} tags combined, that same root keyword may appear in AT MOST 2 tags — not 3, not 4. Before writing your final answer, count the occurrences of the product's main keyword across every tag yourself. If the count is 3 or higher, delete the extra tags and replace them with tags built from a genuinely different search angle instead (occasion, recipient, aesthetic/style, use case, room, price positioning, gift-giving context, or a stated material/technique) — angles that do not contain the main keyword at all. Maximize the variety of distinct words covered across all tags combined; repeating the same word wastes search coverage on Etsy, where the search algorithm already recombines words across tags.
-5. Write a persuasive but honest description: hook first line, then key details, then a warm closing line.
+5. Write exactly 2 DISTINCT description options, both persuasive but honest, both using only facts the seller gave:
+   - Description A ("short"): a concise, skimmable version — a strong hook first line, then 2-4 short benefit-focused lines or bullet-style sentences, then a brief closing line. Aim for buyers who skim.
+   - Description B ("detailed"): a fuller version — hook first line, then more context/story about the product and its details, a clear list of key selling points, then a warm closing line. Aim for buyers who read the full listing before buying.
 6. Output ONLY valid JSON, no markdown fences, no commentary, in this exact shape:
-{"title": "...", "tags": ["...", "..."], "description": "..."}`;
+{"titles": ["...", "...", "..."], "tags": ["...", "..."], "descriptions": ["...", "..."]}`;
 }
 
 /**
@@ -76,11 +87,12 @@ function buildUserPrompt(input) {
   if (input.category) {
     parts.push(`Product category: ${input.category}`);
   }
+
   if (input.extraContext) {
     parts.push(`Additional context from seller: ${input.extraContext}`);
   }
 
-  parts.push('Rewrite this into a native-sounding, buyer-optimized English listing. Return JSON only.');
+  parts.push('Rewrite this into a native-sounding, buyer-optimized English listing with 3 title options, 2 description options, and the tags. Return JSON only.');
 
   return parts.join('\n\n');
 }
@@ -89,7 +101,7 @@ function buildUserPrompt(input) {
  * Собирает промпт для точечного "ремонта" тегов — используется только
  * когда tagDiversity.js обнаружил РЕАЛЬНОЕ (посчитанное в коде, не
  * моделью) нарушение правила разнообразия тегов после первой генерации.
- * Не трогает title/description — только пересобирает список тегов.
+ * Не трогает titles/descriptions — только пересобирает список тегов.
  *
  * @param {string[]} originalTags
  * @param {Array<{word: string, count: number}>} violations
