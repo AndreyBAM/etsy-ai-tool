@@ -124,6 +124,37 @@
   .tagcard-col.before .tagcard-text{ font-style:italic; }
   .tagcard-col.after .tagcard-text{ color:var(--ink); }
 
+  /* --- "как пользоваться": 3 шага --- */
+  .steps{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    margin-bottom:44px;
+  }
+  .step{
+    display:flex;
+    align-items:flex-start;
+    gap:14px;
+  }
+  .step-num{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    flex-shrink:0;
+    width:28px;height:28px;
+    border-radius:50%;
+    background:var(--thread);
+    color:#fff;
+    font-weight:700;
+    font-size:14px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .step-text{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:14.5px;
+    color:var(--ink-soft);
+    padding-top:3px;
+  }
+  .step-text strong{ color:var(--ink); }
+
   form{
     background:#fff;
     border:1px solid var(--line);
@@ -154,6 +185,19 @@
     color:var(--ink);
   }
   textarea:focus{ outline:2px solid var(--thread); outline-offset:1px; }
+
+  select#category{
+    width:100%;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:15px;
+    padding:12px 14px;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--paper);
+    color:var(--ink);
+    margin-top:16px;
+  }
+  select#category:focus{ outline:2px solid var(--thread); outline-offset:1px; }
 
   .btn{
     font-family:'Helvetica Neue',Arial,sans-serif;
@@ -211,7 +255,7 @@
     letter-spacing:.12em;
     font-weight:700;
     color:var(--tag);
-    margin-bottom:10px;
+    margin-bottom:14px;
     display:flex;
     justify-content:space-between;
     align-items:center;
@@ -225,10 +269,34 @@
     padding:4px 9px;
     cursor:pointer;
     color:var(--ink-soft);
+    flex-shrink:0;
   }
   .copy-btn:hover{ background:var(--paper); }
-  .result-title{ font-size:19px; }
-  .result-desc{ font-size:15px; white-space:pre-wrap; color:var(--ink-soft); }
+
+  /* --- карточки вариантов заголовка/описания --- */
+  .option-card{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:10px;
+  }
+  .option-card:last-child{ margin-bottom:0; }
+  .option-label{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-weight:700;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .option-text{
+    font-size:16.5px;
+    white-space:pre-wrap;
+    margin-bottom:10px;
+  }
+
   .tags-list{ display:flex; flex-wrap:wrap; gap:8px; }
   .tag-pill{
     font-family:'Helvetica Neue',Arial,sans-serif;
@@ -268,6 +336,59 @@
   }
   #paywall h3{ margin:0 0 8px; font-size:22px; font-weight:400; }
   #paywall p{ font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14.5px; margin:0 0 18px; }
+
+  /* --- feedback после каждой генерации --- */
+  #feedbackBox{
+    display:none;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    margin-top:20px;
+  }
+  .feedback-label{ font-size:16px; margin-bottom:14px; }
+  .feedback-options{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .feedback-btn{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:100px;
+    padding:9px 16px;
+    font-size:13.5px;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .feedback-btn:hover{ background:var(--paper-dark); }
+  .feedback-btn.selected{
+    background:var(--thread);
+    border-color:var(--thread);
+    color:#fff;
+  }
+  #feedbackEmailRow{
+    display:none;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  #feedbackEmailRow input[type="email"]{
+    flex:1;
+    min-width:200px;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:14px;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--paper);
+    color:var(--ink);
+  }
+  #feedbackEmailRow input[type="email"]:focus{ outline:2px solid var(--thread); outline-offset:1px; }
+  #feedbackThanks{
+    display:none;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:14px;
+    color:var(--tag);
+    font-weight:700;
+  }
 
   footer{
     font-family:'Helvetica Neue',Arial,sans-serif;
@@ -321,9 +442,39 @@
     </div>
   </div>
 
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text"><strong>Ürününüzü anlatın</strong> — hangi dilde olursa olsun, birkaç cümle yeterli.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text"><strong>Hazır metni alın</strong> — birkaç başlık seçeneği, birkaç açıklama seçeneği ve 13 etiket.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text"><strong>Kopyalayıp yapıştırın</strong> — Etsy listenizin ilgili alanlarına ekleyin, hazır.</div>
+    </div>
+  </div>
+
   <form id="genForm">
     <label for="rawText">Ürününüzü anlatın — hangi dilde olursa olsun</label>
     <textarea id="rawText" placeholder="Ürün açıklamanızı buraya kendi dilinizde yazın veya yapıştırın..." required></textarea>
+
+    <label for="category" style="margin-top:16px;">Kategori (isteğe bağlı)</label>
+    <select id="category">
+      <option value="">Seçmek istemiyorum</option>
+      <option value="Jewelry">Takı</option>
+      <option value="Clothing">Giyim</option>
+      <option value="Home Decor">Ev Dekorasyonu</option>
+      <option value="Art & Collectibles">Sanat & Koleksiyon</option>
+      <option value="Craft Supplies">Hobi Malzemeleri</option>
+      <option value="Toys & Games">Oyuncak & Oyun</option>
+      <option value="Accessories">Aksesuar</option>
+      <option value="Bath & Beauty">Banyo & Güzellik</option>
+      <option value="Other">Diğer</option>
+    </select>
+
     <button type="submit" class="btn" id="genBtn">Etsy listemi oluştur</button>
     <div class="counter" id="counter"></div>
     <div class="error" id="errorBox"></div>
@@ -333,18 +484,35 @@
 
   <div id="result">
     <div class="result-card">
-      <div class="result-label">Başlık</div>
-      <div class="result-title" id="outTitle"></div>
+      <div class="result-label">Başlık Seçenekleri</div>
+      <div id="outTitles"></div>
     </div>
     <div class="result-card">
-      <div class="result-label">Açıklama</div>
-      <div class="result-desc" id="outDesc"></div>
+      <div class="result-label">Açıklama Seçenekleri</div>
+      <div id="outDescs"></div>
     </div>
     <div class="result-card">
-      <div class="result-label">13 Etiket</div>
+      <div class="result-label">
+        13 Etiket
+        <button class="copy-btn" id="copyAllTags" type="button">Tümünü kopyala</button>
+      </div>
       <div class="tags-list" id="outTags"></div>
     </div>
     <button class="btn secondary" id="anotherBtn">Başka bir liste dene</button>
+  </div>
+
+  <div id="feedbackBox">
+    <div class="feedback-label">Bu metin, olduğu gibi yayınlamak için yeterli miydi?</div>
+    <div class="feedback-options">
+      <button type="button" class="feedback-btn" data-rating="good">Evet, yeterli</button>
+      <button type="button" class="feedback-btn" data-rating="minor_edits">Biraz düzenlerim</button>
+      <button type="button" class="feedback-btn" data-rating="rewrite">Baştan yazarım</button>
+    </div>
+    <div id="feedbackEmailRow">
+      <input type="email" id="feedbackEmail" placeholder="E-posta (isteğe bağlı)">
+      <button type="button" class="btn secondary" id="feedbackSubmit">Gönder</button>
+    </div>
+    <div id="feedbackThanks">Teşekkürler, geri bildiriminiz için! 🙌</div>
   </div>
 
   <div id="paywall">
@@ -361,6 +529,6 @@
 </div>
 
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-<script src="/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
