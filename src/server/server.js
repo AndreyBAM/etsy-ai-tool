@@ -48,6 +48,14 @@ const CREDITS_PER_PURCHASE = parseInt(process.env.CREDITS_PER_PURCHASE || '20', 
 // кого угодно в интернете, кто узнал наш URL.
 const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
 
+// Секретный ключ для /api/stats — простая защита, чтобы статистику
+// (email-адреса, фидбек, счётчики) не мог посмотреть кто угодно, кто
+// узнает URL сайта. Задать свой в Railway → Variables → STATS_SECRET.
+// Если не задан — используется значение по умолчанию (см. предупреждение
+// в консоли при старте сервера ниже), сменить обязательно перед тем как
+// делиться ссылкой на статистику с кем-либо ещё.
+const STATS_SECRET = process.env.STATS_SECRET || 'change-me-to-something-random';
+
 // Простые счётчики в памяти процесса, дополнительно сохраняемые на диск
 // (см. loadState/saveState ниже), чтобы переживать рестарты и передеплои
 // Railway. Если тест приживётся и понадобится собирать историю дольше —
@@ -298,6 +306,55 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // --- сводная статистика для быстрого просмотра в браузере ---
+  // Открывается по адресу: ваш-сайт/api/stats?key=ВАШ_STATS_SECRET
+  // Показывает: сколько всего пользователей, сколько генераций,
+  // сколько оплаченных генераций начислено, и отдельно — сводку по
+  // фидбеку (сколько каждой из 3 оценок, сколько email оставлено,
+  // и сам список записей с email, чтобы можно было с кем-то связаться).
+  if (req.method === 'GET' && url.pathname === '/api/stats') {
+    if (url.searchParams.get('key') !== STATS_SECRET) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Forbidden' }));
+    }
+
+    const uids = new Set([...usage.keys(), ...paidCredits.keys()]);
+    let totalGenerations = 0;
+    let totalPaidCredits = 0;
+    let payingUsers = 0;
+    const details = [...uids].map((id) => {
+      const gen = usage.get(id) || 0;
+      const credits = paidCredits.get(id) || 0;
+      totalGenerations += gen;
+      totalPaidCredits += credits;
+      if (credits > 0) payingUsers += 1;
+      return { uid: id, generations: gen, paidCredits: credits };
+    });
+
+    const byRating = { good: 0, minor_edits: 0, rewrite: 0, other: 0 };
+    let emailsCollected = 0;
+    feedback.forEach((f) => {
+      if (byRating[f.rating] !== undefined) byRating[f.rating] += 1;
+      else byRating.other += 1;
+      if (f.email) emailsCollected += 1;
+    });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      totalUsers: uids.size,
+      totalGenerations,
+      totalPaidCredits,
+      payingUsers,
+      details,
+      feedback: {
+        totalResponses: feedback.length,
+        byRating,
+        emailsCollected,
+        entries: feedback,
+      },
+    }, null, 2));
+  }
+
   if (req.method !== 'POST' || url.pathname !== '/api/generate') {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'Not found' }));
@@ -383,5 +440,8 @@ server.listen(PORT, () => {
   console.log(`Free limit: ${FREE_LIMIT} generations. Credits per purchase: ${CREDITS_PER_PURCHASE}.`);
   if (!PADDLE_WEBHOOK_SECRET) {
     console.warn('WARNING: PADDLE_WEBHOOK_SECRET not set — payments will not be credited automatically.');
+  }
+  if (!process.env.STATS_SECRET) {
+    console.warn('WARNING: STATS_SECRET not set — using an insecure default. Set your own before sharing the /api/stats link with anyone.');
   }
 });
