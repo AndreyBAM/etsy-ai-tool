@@ -1,31 +1,27 @@
 /**
- * app.js — фронтенд лендинга
+ * app.js — funnel frontend
  * ---------------------------------------------------------------------
- * Ничего не хранит на сервере, кроме анонимного uid (localStorage) —
- * позволяет показывать 3 разных заголовка объявлений (?v=1|2|3) на
- * одной и той же странице, чтобы можно было гонять все 3 варианта
- * рекламы Meta на один и тот же лендинг с UTM-меткой.
+ * Ничего не хранит на сервере, кроме анонимного uid (localStorage).
  *
- * v2 (сентябрь 2026): рендерит 3 варианта заголовка + 2 варианта
- * описания (вместо одного каждого), рабочие кнопки "Kopyala" на каждый
- * блок, опциональную категорию товара и короткий feedback-опрос после
- * каждой генерации.
+ * v3 (сентябрь 2026):
+ *  - backend теперь отдаёт ОДИН заголовок и ОДНО описание (не массивы),
+ *    плюс перевод title/description/каждого тега на язык продавца —
+ *    рендерим их рядом с английским текстом.
+ *  - по итогам анализа двух кампаний решили использовать в рекламе
+ *    только "Вариант 3" (эмоциональный стиль, без упоминания AI) —
+ *    варианты 1 и 2 удалены из кода, чтобы не путать; если ссылка
+ *    придёт без ?v= или с другим значением, просто показывается
+ *    дефолтный (статический) заголовок из index.html.
  * ---------------------------------------------------------------------
  */
 
-// --- тексты объявлений, привязанные к вариантам рекламы (?v=1|2|3) ---
+// --- единственный активный вариант объявления (см. решение по итогам
+// кампании 2: Вариант 3 стабильно забирал 85–95% показов и весь трафик
+// до генерации в обеих кампаниях) ---
 const VARIANTS = {
-  1: {
-    headline: 'Etsy\'de satış yapıyorsunuz, ama İngilizce <em>ana diliniz</em> değil mi?',
-    sub: 'Ürününüzü kendi dilinizde anlatın — hazır İngilizce başlık, açıklama ve Etsy için 13 etiket alın. Çeviri yok, prompt yazmak yok, kopyala-yapıştır yok.',
-  },
-  2: {
-    headline: 'Hâlâ Etsy listelerinizi ChatGPT ile <em>elle</em> mi yazıyorsunuz?',
-    sub: 'Sekmeler arasında metin kopyalamayı bırakın. Ürününüzü anlatın — saniyeler içinde hazır bir Etsy listesi alın.',
-  },
   3: {
     headline: 'İngilizceniz <em>Etsy\'de satış yapmanıza</em> engel mi oluyor?',
-    sub: 'İngilizceniz güçlü olmasa bile doğal, native gibi görünen başlıklar, açıklamalar ve etiketler oluşturun.',
+    sub: 'İngilizceniz güçlü olmasa bile doğal, native gibi görünen bir metin alın — üstelik Türkçe çevirisiyle birlikte, kendiniz kontrol edebilirsiniz.',
   },
 };
 
@@ -48,10 +44,6 @@ function getUid() {
   return uid;
 }
 const uid = getUid();
-
-function currentVariant() {
-  return new URLSearchParams(window.location.search).get('v') || 'none';
-}
 
 // --- Paddle checkout (overlay) ---
 // Client-side token — публичный, безопасно хранить прямо в коде фронтенда
@@ -102,16 +94,19 @@ document.getElementById('payBtn').addEventListener('click', () => {
   });
 });
 
-// --- элементы формы/результата ---
+// UTM/variant passthrough so the server can log which ad drove the action
+function currentVariant() {
+  return new URLSearchParams(window.location.search).get('v') || 'none';
+}
+
 const form = document.getElementById('genForm');
 const genBtn = document.getElementById('genBtn');
 const loading = document.getElementById('loading');
 const resultBox = document.getElementById('result');
+const feedbackBox = document.getElementById('feedbackBox');
 const paywallBox = document.getElementById('paywall');
 const errorBox = document.getElementById('errorBox');
 const counterEl = document.getElementById('counter');
-const categorySelect = document.getElementById('category');
-const feedbackBox = document.getElementById('feedbackBox');
 
 function setCounter(remaining) {
   if (remaining === null || remaining === undefined) { counterEl.textContent = ''; return; }
@@ -128,20 +123,93 @@ fetch('/api/usage?uid=' + encodeURIComponent(uid))
   .then((d) => setCounter(d.remaining))
   .catch(() => {});
 
-// --- копирование в буфер обмена ------------------------------------------
-// Общая функция для всех кнопок "Kopyala": заголовки, описания, теги.
-function copyText(text, btnEl) {
-  const done = () => {
-    if (!btnEl) return;
-    const original = btnEl.textContent;
-    btnEl.textContent = 'Kopyalandı ✓';
-    btnEl.disabled = true;
-    setTimeout(() => {
-      btnEl.textContent = original;
-      btnEl.disabled = false;
-    }, 1500);
-  };
+/**
+ * Рендерит список тегов (или их перевод) в виде "пилюль" внутри указанного
+ * контейнера. translation=true добавляет пунктирный стиль для отличия от
+ * оригинальных английских тегов.
+ */
+function renderTagPills(container, tags, translation) {
+  container.innerHTML = '';
+  (tags || []).forEach((t) => {
+    const span = document.createElement('span');
+    span.className = translation ? 'tag-pill translation' : 'tag-pill';
+    span.textContent = t;
+    container.appendChild(span);
+  });
+}
 
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.style.display = 'none';
+
+  const rawText = document.getElementById('rawText').value.trim();
+  if (!rawText) return;
+
+  genBtn.disabled = true;
+  loading.style.display = 'block';
+  resultBox.style.display = 'none';
+  feedbackBox.style.display = 'none';
+  paywallBox.style.display = 'none';
+  resetFeedbackUI();
+
+  try {
+    const category = document.getElementById('category').value;
+
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rawText, uid, variant: currentVariant(), category: category || undefined }),
+    });
+    const data = await res.json();
+
+    if (res.status === 402) {
+      // лимит бесплатных генераций исчерпан
+      paywallBox.style.display = 'block';
+      setCounter(0);
+      return;
+    }
+    if (!res.ok) {
+      throw new Error(data.error || 'Bir şeyler yanlış gitti');
+    }
+
+    document.getElementById('outTitle').textContent = data.title || '';
+    document.getElementById('outTitleTranslation').textContent = data.titleTranslation || '';
+    document.getElementById('outDesc').textContent = data.description || '';
+    document.getElementById('outDescTranslation').textContent = data.descriptionTranslation || '';
+    renderTagPills(document.getElementById('outTags'), data.tags, false);
+    renderTagPills(document.getElementById('outTagsTranslation'), data.tagsTranslation, true);
+
+    resultBox.style.display = 'block';
+    // Каждая генерация — шанс собрать сигнал о качестве текста; показываем
+    // feedback-блок сразу под результатом, а не ждём отдельного действия.
+    lastGenerationUid = uid;
+    feedbackBox.style.display = 'block';
+    setCounter(data.remaining);
+  } catch (err) {
+    errorBox.textContent = 'Hata: ' + err.message + '. Lütfen tekrar deneyin.';
+    errorBox.style.display = 'block';
+  } finally {
+    genBtn.disabled = false;
+    loading.style.display = 'none';
+  }
+});
+
+document.getElementById('anotherBtn').addEventListener('click', () => {
+  resultBox.style.display = 'none';
+  feedbackBox.style.display = 'none';
+  document.getElementById('rawText').value = '';
+  document.getElementById('rawText').focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// --- копирование заголовка/описания одним кликом ---
+function copyText(text, btn) {
+  if (!text) return;
+  const done = () => {
+    const original = btn.textContent;
+    btn.textContent = 'Kopyalandı ✓';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
   } else {
@@ -156,153 +224,60 @@ function fallbackCopy(text, done) {
   ta.style.opacity = '0';
   document.body.appendChild(ta);
   ta.select();
-  try {
-    document.execCommand('copy');
-    done();
-  } catch (err) {
-    // Тихо игнорируем — в худшем случае пользователь скопирует текст вручную.
-  }
+  try { document.execCommand('copy'); done(); } catch (e) { /* тихо игнорируем */ }
   document.body.removeChild(ta);
 }
 
-// --- рендер карточек вариантов заголовка/описания ----------------------
-function renderOptionCard(container, text, label) {
-  const card = document.createElement('div');
-  card.className = 'option-card';
-
-  const labelEl = document.createElement('div');
-  labelEl.className = 'option-label';
-  labelEl.textContent = label;
-
-  const textEl = document.createElement('div');
-  textEl.className = 'option-text';
-  textEl.textContent = text;
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'copy-btn';
-  btn.textContent = 'Kopyala';
-  btn.addEventListener('click', () => copyText(text, btn));
-
-  card.appendChild(labelEl);
-  card.appendChild(textEl);
-  card.appendChild(btn);
-  container.appendChild(card);
-}
-
-const TITLE_LABELS = ['Seçenek 1', 'Seçenek 2', 'Seçenek 3'];
-const DESC_LABELS = ['Kısa versiyon', 'Detaylı versiyon'];
-
-// --- feedback: her üretimden sonra gösterilir ---------------------------
-let selectedRating = null;
-
-function resetFeedbackBox() {
-  feedbackBox.style.display = 'block';
-  selectedRating = null;
-  document.getElementById('feedbackEmailRow').style.display = 'none';
-  document.getElementById('feedbackThanks').style.display = 'none';
-  document.querySelectorAll('.feedback-btn').forEach((b) => b.classList.remove('selected'));
-  document.getElementById('feedbackEmail').value = '';
-}
-
-document.querySelectorAll('.feedback-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    selectedRating = btn.dataset.rating;
-    document.querySelectorAll('.feedback-btn').forEach((b) => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    document.getElementById('feedbackEmailRow').style.display = 'flex';
-  });
+document.getElementById('copyTitleBtn').addEventListener('click', (e) => {
+  copyText(document.getElementById('outTitle').textContent, e.currentTarget);
 });
-
-document.getElementById('feedbackSubmit').addEventListener('click', () => {
-  const email = document.getElementById('feedbackEmail').value.trim();
-  fetch('/api/feedback', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uid, rating: selectedRating, email: email || null }),
-  }).catch(() => {});
-
-  document.getElementById('feedbackEmailRow').style.display = 'none';
-  document.getElementById('feedbackThanks').style.display = 'block';
+document.getElementById('copyDescBtn').addEventListener('click', (e) => {
+  copyText(document.getElementById('outDesc').textContent, e.currentTarget);
 });
-
-// --- основной сабмит формы ------------------------------------------------
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  errorBox.style.display = 'none';
-
-  const rawText = document.getElementById('rawText').value.trim();
-  if (!rawText) return;
-
-  genBtn.disabled = true;
-  loading.classList.add('active');
-  resultBox.style.display = 'none';
-  paywallBox.style.display = 'none';
-  feedbackBox.style.display = 'none';
-
-  try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rawText,
-        uid,
-        variant: currentVariant(),
-        category: categorySelect ? (categorySelect.value || undefined) : undefined,
-      }),
-    });
-    const data = await res.json();
-
-    if (res.status === 402) {
-      // лимит бесплатных генераций исчерпан
-      paywallBox.style.display = 'block';
-      setCounter(0);
-      return;
-    }
-
-    if (!res.ok) {
-      throw new Error(data.error || 'Bir şeyler yanlış gitti');
-    }
-
-    const titlesWrap = document.getElementById('outTitles');
-    titlesWrap.innerHTML = '';
-    (data.titles || []).forEach((t, i) => renderOptionCard(titlesWrap, t, TITLE_LABELS[i] || `Seçenek ${i + 1}`));
-
-    const descsWrap = document.getElementById('outDescs');
-    descsWrap.innerHTML = '';
-    (data.descriptions || []).forEach((d, i) => renderOptionCard(descsWrap, d, DESC_LABELS[i] || `Seçenek ${i + 1}`));
-
-    const tagsWrap = document.getElementById('outTags');
-    tagsWrap.innerHTML = '';
-    (data.tags || []).forEach((t) => {
-      const span = document.createElement('span');
-      span.className = 'tag-pill';
-      span.textContent = t;
-      tagsWrap.appendChild(span);
-    });
-
-    resultBox.style.display = 'block';
-    setCounter(data.remaining);
-    resetFeedbackBox();
-    resultBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (err) {
-    errorBox.textContent = 'Hata: ' + err.message + '. Lütfen tekrar deneyin.';
-    errorBox.style.display = 'block';
-  } finally {
-    genBtn.disabled = false;
-    loading.classList.remove('active');
-  }
-});
-
 document.getElementById('copyAllTags').addEventListener('click', (e) => {
   const tags = Array.from(document.querySelectorAll('#outTags .tag-pill')).map((el) => el.textContent);
   copyText(tags.join(', '), e.currentTarget);
 });
 
-document.getElementById('anotherBtn').addEventListener('click', () => {
-  resultBox.style.display = 'none';
-  feedbackBox.style.display = 'none';
-  document.getElementById('rawText').value = '';
-  document.getElementById('rawText').focus();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+// --- feedback после генерации: оценка + опциональный email ---
+let selectedRating = null;
+let lastGenerationUid = null;
+const feedbackEmailRow = document.getElementById('feedbackEmailRow');
+const feedbackThanks = document.getElementById('feedbackThanks');
+const feedbackOptions = document.querySelectorAll('.feedback-btn');
+
+function resetFeedbackUI() {
+  selectedRating = null;
+  feedbackOptions.forEach((b) => b.classList.remove('selected'));
+  feedbackEmailRow.style.display = 'none';
+  feedbackThanks.style.display = 'none';
+  document.getElementById('feedbackEmail').value = '';
+}
+
+feedbackOptions.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    selectedRating = btn.dataset.rating;
+    feedbackOptions.forEach((b) => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    feedbackEmailRow.style.display = 'flex';
+  });
+});
+
+document.getElementById('feedbackSubmit').addEventListener('click', async () => {
+  if (!selectedRating) return;
+  const email = document.getElementById('feedbackEmail').value.trim() || null;
+
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: lastGenerationUid || uid, rating: selectedRating, email }),
+    });
+  } catch (err) {
+    // Не блокируем UX, даже если сеть подвела — сигнал не критичен
+    // настолько, чтобы мешать пользователю продолжать пользоваться формой.
+  }
+
+  feedbackEmailRow.style.display = 'none';
+  feedbackThanks.style.display = 'block';
 });
