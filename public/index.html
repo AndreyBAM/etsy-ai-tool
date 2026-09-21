@@ -7,416 +7,431 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="favicon.png">
 <style>
-  :root{
-    --paper:#F2ECE0;
-    --paper-dark:#E6DCC8;
-    --ink:#232019;
-    --ink-soft:#5B5548;
-    --thread:#B8402E;
-    --thread-dark:#8F2E20;
-    --tag:#3F6E5C;
-    --line: rgba(35,32,25,0.14);
-    --radius: 4px;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:var(--paper);
-    color:var(--ink);
-    font-family: 'Iowan Old Style','Georgia','Times New Roman',serif;
-    line-height:1.5;
-    min-height:100vh;
-    background-image:
-      radial-gradient(circle at 1px 1px, rgba(35,32,25,0.05) 1px, transparent 0);
-    background-size: 18px 18px;
-  }
-  .util{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-  }
-  .wrap{
-    max-width:720px;
-    margin:0 auto;
-    padding:56px 22px 120px;
-  }
-  .brand{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-bottom:18px;
-  }
-  .brand img{
-    height:26px;
-    width:auto;
-    display:block;
-  }
-  .tagline{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    text-transform:uppercase;
-    letter-spacing:.14em;
-    font-size:11px;
-    color:var(--thread);
-    font-weight:700;
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-  .tagline::before{
-    content:"";
-    width:22px;height:1px;background:var(--thread);display:inline-block;
-  }
-  h1{
-    font-size:clamp(28px,5vw,42px);
-    line-height:1.12;
-    margin:0 0 18px;
-    font-weight:400;
-    letter-spacing:-0.01em;
-  }
-  h1 em{
-    font-style:normal;
-    color:var(--thread-dark);
-    border-bottom:2px solid var(--thread);
-  }
-  .sub{
-    font-size:18px;
-    color:var(--ink-soft);
-    max-width:52ch;
-    margin:0 0 40px;
-  }
-
-  /* the "tag" motif — a hero visual made of an actual before/after Etsy tag */
-  .tagcard{
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    box-shadow: 0 1px 0 rgba(35,32,25,.05), 0 12px 24px -16px rgba(35,32,25,.35);
-    padding:0;
-    margin-bottom:44px;
-    overflow:hidden;
-  }
-  .tagcard-row{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-  }
-  @media (max-width:560px){ .tagcard-row{grid-template-columns:1fr;} }
-  .tagcard-col{
-    padding:22px 24px;
-  }
-  .tagcard-col + .tagcard-col{
-    border-left:1px dashed var(--line);
-  }
-  @media (max-width:560px){
-    .tagcard-col + .tagcard-col{ border-left:none; border-top:1px dashed var(--line);}
-  }
-  .tagcard-label{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:10px;
-    text-transform:uppercase;
-    letter-spacing:.12em;
-    font-weight:700;
-    margin-bottom:10px;
-  }
-  .tagcard-col.before .tagcard-label{color:var(--ink-soft);}
-  .tagcard-col.after .tagcard-label{color:var(--tag);}
-  .tagcard-text{
-    font-size:15px;
-    color:var(--ink-soft);
-  }
-  .tagcard-col.before .tagcard-text{ font-style:italic; }
-  .tagcard-col.after .tagcard-text{ color:var(--ink); }
-
-  /* --- "как пользоваться": 3 шага --- */
-  .steps{
-    display:flex;
-    flex-direction:column;
-    gap:14px;
-    margin-bottom:44px;
-  }
-  .step{
-    display:flex;
-    align-items:flex-start;
-    gap:14px;
-  }
-  .step-num{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    flex-shrink:0;
-    width:28px;height:28px;
-    border-radius:50%;
-    background:var(--thread);
-    color:#fff;
-    font-weight:700;
-    font-size:14px;
-    display:flex; align-items:center; justify-content:center;
-  }
-  .step-text{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:14.5px;
-    color:var(--ink-soft);
-    padding-top:3px;
-  }
-  .step-text strong{ color:var(--ink); }
-
-  form{
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:26px;
-    box-shadow: 0 1px 0 rgba(35,32,25,.05), 0 16px 30px -20px rgba(35,32,25,.4);
-  }
-  label{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:12px;
-    text-transform:uppercase;
-    letter-spacing:.1em;
-    font-weight:700;
-    color:var(--ink-soft);
-    display:block;
-    margin-bottom:10px;
-  }
-  textarea{
-    width:100%;
-    min-height:130px;
-    resize:vertical;
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:16px;
-    padding:14px;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    background:var(--paper);
-    color:var(--ink);
-  }
-  textarea:focus{ outline:2px solid var(--thread); outline-offset:1px; }
-
-  select#category{
-    width:100%;
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:15px;
-    padding:12px 14px;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    background:var(--paper);
-    color:var(--ink);
-    margin-top:16px;
-  }
-  select#category:focus{ outline:2px solid var(--thread); outline-offset:1px; }
-
-  .btn{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    background:var(--thread);
-    color:#fff;
-    border:none;
-    padding:14px 22px;
-    font-size:15px;
-    font-weight:700;
-    border-radius:var(--radius);
-    cursor:pointer;
-    margin-top:16px;
-    transition:background .15s ease, transform .1s ease;
-  }
-  .btn:hover{ background:var(--thread-dark); }
-  .btn:active{ transform:translateY(1px); }
-  .btn:disabled{ background:#B8AFA0; cursor:not-allowed; }
-  .btn.secondary{
-    background:transparent;
-    color:var(--thread-dark);
-    border:1.5px solid var(--thread);
-  }
-  .btn.secondary:hover{ background:rgba(184,64,46,.08); }
-
-  .counter{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:12px;
-    color:var(--ink-soft);
-    margin-top:14px;
-  }
-
-  .error{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    color:var(--thread-dark);
-    font-size:14px;
-    margin-top:14px;
-    display:none;
-  }
-
-  #result{ margin-top:34px; display:none; }
-  .result-card{
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:22px 24px;
-    margin-bottom:14px;
-  }
-  .result-label{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:10px;
-    text-transform:uppercase;
-    letter-spacing:.12em;
-    font-weight:700;
-    color:var(--tag);
-    margin-bottom:14px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-  }
-  .copy-btn{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    background:none;
-    border:1px solid var(--line);
-    border-radius:3px;
-    font-size:11px;
-    padding:4px 9px;
-    cursor:pointer;
-    color:var(--ink-soft);
-    flex-shrink:0;
-  }
-  .copy-btn:hover{ background:var(--paper); }
-
-  /* --- карточки вариантов заголовка/описания --- */
-  .option-card{
-    background:var(--paper);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:14px 16px;
-    margin-bottom:10px;
-  }
-  .option-card:last-child{ margin-bottom:0; }
-  .option-label{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:10px;
-    text-transform:uppercase;
-    letter-spacing:.1em;
-    font-weight:700;
-    color:var(--ink-soft);
-    margin-bottom:6px;
-  }
-  .option-text{
-    font-size:16.5px;
-    white-space:pre-wrap;
-    margin-bottom:10px;
-  }
-
-  .tags-list{ display:flex; flex-wrap:wrap; gap:8px; }
-  .tag-pill{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:12.5px;
-    background:var(--paper-dark);
-    border:1px solid var(--line);
-    padding:5px 10px;
-    border-radius:100px;
-  }
-
-  #loading{ display:none; margin-top:20px; font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14px; align-items:center; }
-  #loading.active{ display:flex; }
-  #loading .dot{ animation: blink 1.2s infinite; }
-  @keyframes blink{ 0%,100%{opacity:.25} 50%{opacity:1} }
-
-  .spinner{
-    display:inline-block;
-    width:16px;
-    height:16px;
-    border:2px solid rgba(35,32,25,0.15);
-    border-top-color: var(--thread);
-    border-radius:50%;
-    animation: spin 0.7s linear infinite;
-    margin-right:8px;
-    flex-shrink:0;
-  }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
-
-  #paywall{
-    display:none;
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:28px 26px;
-    text-align:center;
-    margin-top:20px;
-  }
-  #paywall h3{ margin:0 0 8px; font-size:22px; font-weight:400; }
-  #paywall p{ font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14.5px; margin:0 0 18px; }
-
-  /* --- feedback после каждой генерации --- */
-  #feedbackBox{
-    display:none;
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:22px 24px;
-    margin-top:20px;
-  }
-  .feedback-label{ font-size:16px; margin-bottom:14px; }
-  .feedback-options{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
-  .feedback-btn{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    background:var(--paper);
-    border:1px solid var(--line);
-    border-radius:100px;
-    padding:9px 16px;
-    font-size:13.5px;
-    cursor:pointer;
-    color:var(--ink);
-  }
-  .feedback-btn:hover{ background:var(--paper-dark); }
-  .feedback-btn.selected{
-    background:var(--thread);
-    border-color:var(--thread);
-    color:#fff;
-  }
-  #feedbackEmailRow{
-    display:none;
-    gap:10px;
-    align-items:center;
-    flex-wrap:wrap;
-  }
-  #feedbackEmailRow input[type="email"]{
-    flex:1;
-    min-width:200px;
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:14px;
-    padding:10px 12px;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    background:var(--paper);
-    color:var(--ink);
-  }
-  #feedbackEmailRow input[type="email"]:focus{ outline:2px solid var(--thread); outline-offset:1px; }
-  #feedbackThanks{
-    display:none;
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:14px;
-    color:var(--tag);
-    font-weight:700;
-  }
-
-  footer{
-    font-family:'Helvetica Neue',Arial,sans-serif;
-    font-size:12px;
-    color:var(--ink-soft);
-    text-align:center;
-    margin-top:56px;
-    opacity:.7;
-    line-height:1.8;
-  }
-  footer img{
-    height:22px;
-    width:auto;
-    display:block;
-    margin:0 auto 10px;
-    opacity:.9;
-  }
-  footer a{
-    color:var(--ink-soft);
-    text-decoration:underline;
-  }
-  footer a:hover{ color:var(--thread-dark); }
-
-  @media (prefers-reduced-motion: reduce){
-    .btn, .copy-btn{ transition:none; }
-    #loading .dot{ animation:none; }
-    .spinner{ animation:none; }
-  }
+:root{
+  --paper:#F2ECE0;
+  --paper-dark:#E6DCC8;
+  --ink:#232019;
+  --ink-soft:#5B5548;
+  --thread:#B8402E;
+  --thread-dark:#8F2E20;
+  --tag:#3F6E5C;
+  --line: rgba(35,32,25,0.14);
+  --radius: 4px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family: 'Iowan Old Style','Georgia','Times New Roman',serif;
+  line-height:1.5;
+  min-height:100vh;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(35,32,25,0.05) 1px, transparent 0);
+  background-size: 18px 18px;
+}
+.util{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+}
+.wrap{
+  max-width:720px;
+  margin:0 auto;
+  padding:56px 22px 120px;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:18px;
+}
+.brand img{
+  height:26px;
+  width:auto;
+  display:block;
+}
+.tagline{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  font-size:11px;
+  color:var(--thread);
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.tagline::before{
+  content:"";
+  width:22px;height:1px;background:var(--thread);display:inline-block;
+}
+h1{
+  font-size:clamp(28px,5vw,42px);
+  line-height:1.12;
+  margin:0 0 18px;
+  font-weight:400;
+  letter-spacing:-0.01em;
+}
+h1 em{
+  font-style:normal;
+  color:var(--thread-dark);
+  border-bottom:2px solid var(--thread);
+}
+.sub{
+  font-size:18px;
+  color:var(--ink-soft);
+  max-width:52ch;
+  margin:0 0 40px;
+}
+/* the "tag" motif — a hero visual made of an actual before/after Etsy tag */
+.tagcard{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow: 0 1px 0 rgba(35,32,25,.05), 0 12px 24px -16px rgba(35,32,25,.35);
+  padding:0;
+  margin-bottom:44px;
+  overflow:hidden;
+}
+.tagcard-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+}
+@media (max-width:560px){ .tagcard-row{grid-template-columns:1fr;} }
+.tagcard-col{
+  padding:22px 24px;
+}
+.tagcard-col + .tagcard-col{
+  border-left:1px dashed var(--line);
+}
+@media (max-width:560px){
+  .tagcard-col + .tagcard-col{ border-left:none; border-top:1px dashed var(--line);}
+}
+.tagcard-label{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  font-weight:700;
+  margin-bottom:10px;
+}
+.tagcard-col.before .tagcard-label{color:var(--ink-soft);}
+.tagcard-col.after .tagcard-label{color:var(--tag);}
+.tagcard-text{
+  font-size:15px;
+  color:var(--ink-soft);
+}
+.tagcard-col.before .tagcard-text{ font-style:italic; }
+.tagcard-col.after .tagcard-text{ color:var(--ink); }
+.tagcard-note{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:12px;
+  color:var(--tag);
+  margin-top:12px;
+  font-weight:700;
+}
+/* --- "как пользоваться": 3 шага --- */
+.steps{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-bottom:44px;
+}
+.step{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+}
+.step-num{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  flex-shrink:0;
+  width:28px;height:28px;
+  border-radius:50%;
+  background:var(--thread);
+  color:#fff;
+  font-weight:700;
+  font-size:14px;
+  display:flex; align-items:center; justify-content:center;
+}
+.step-text{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:14.5px;
+  color:var(--ink-soft);
+  padding-top:3px;
+}
+.step-text strong{ color:var(--ink); }
+form{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:26px;
+  box-shadow: 0 1px 0 rgba(35,32,25,.05), 0 16px 30px -20px rgba(35,32,25,.4);
+}
+label{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-weight:700;
+  color:var(--ink-soft);
+  display:block;
+  margin-bottom:10px;
+}
+.hint{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:13px;
+  color:var(--ink-soft);
+  margin:-4px 0 12px;
+  line-height:1.5;
+}
+.hint strong{ color:var(--ink); }
+textarea{
+  width:100%;
+  min-height:130px;
+  resize:vertical;
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:16px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--paper);
+  color:var(--ink);
+}
+textarea:focus{ outline:2px solid var(--thread); outline-offset:1px; }
+select#category{
+  width:100%;
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:15px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--paper);
+  color:var(--ink);
+  margin-top:16px;
+}
+select#category:focus{ outline:2px solid var(--thread); outline-offset:1px; }
+.btn{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:var(--thread);
+  color:#fff;
+  border:none;
+  padding:14px 22px;
+  font-size:15px;
+  font-weight:700;
+  border-radius:var(--radius);
+  cursor:pointer;
+  margin-top:16px;
+  transition:background .15s ease, transform .1s ease;
+}
+.btn:hover{ background:var(--thread-dark); }
+.btn:active{ transform:translateY(1px); }
+.btn:disabled{ background:#B8AFA0; cursor:not-allowed; }
+.btn.secondary{
+  background:transparent;
+  color:var(--thread-dark);
+  border:1.5px solid var(--thread);
+}
+.btn.secondary:hover{ background:rgba(184,64,46,.08); }
+.counter{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:12px;
+  color:var(--ink-soft);
+  margin-top:14px;
+}
+.error{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  color:var(--thread-dark);
+  font-size:14px;
+  margin-top:14px;
+  display:none;
+}
+#result{ margin-top:34px; display:none; }
+.result-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:22px 24px;
+  margin-bottom:14px;
+}
+.result-label{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  font-weight:700;
+  color:var(--tag);
+  margin-bottom:14px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.copy-btn{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  background:none;
+  border:1px solid var(--line);
+  border-radius:3px;
+  font-size:11px;
+  padding:4px 9px;
+  cursor:pointer;
+  color:var(--ink-soft);
+  flex-shrink:0;
+}
+.copy-btn:hover{ background:var(--paper); }
+.option-text{
+  font-size:16.5px;
+  white-space:pre-wrap;
+}
+/* --- перевод рядом с результатом (v3: проверка смысла продавцом) --- */
+.translation-block{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px dashed var(--line);
+}
+.translation-label{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-weight:700;
+  color:var(--ink-soft);
+  margin-bottom:8px;
+  display:block;
+}
+.translation-text{
+  font-size:15px;
+  color:var(--ink-soft);
+  font-style:italic;
+  white-space:pre-wrap;
+}
+.tags-list{ display:flex; flex-wrap:wrap; gap:8px; }
+.tag-pill{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:12.5px;
+  background:var(--paper-dark);
+  border:1px solid var(--line);
+  padding:5px 10px;
+  border-radius:100px;
+}
+.tag-pill.translation{
+  background:transparent;
+  border-style:dashed;
+  color:var(--ink-soft);
+  font-style:italic;
+}
+#loading{ display:none; margin-top:20px; font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14px; align-items:center; }
+#loading.active{ display:flex; }
+#loading .dot{ animation: blink 1.2s infinite; }
+@keyframes blink{ 0%,100%{opacity:.25} 50%{opacity:1} }
+.spinner{
+  display:inline-block;
+  width:16px;
+  height:16px;
+  border:2px solid rgba(35,32,25,0.15);
+  border-top-color: var(--thread);
+  border-radius:50%;
+  animation: spin 0.7s linear infinite;
+  margin-right:8px;
+  flex-shrink:0;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+#paywall{
+  display:none;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:28px 26px;
+  text-align:center;
+  margin-top:20px;
+}
+#paywall h3{ margin:0 0 8px; font-size:22px; font-weight:400; }
+#paywall p{ font-family:'Helvetica Neue',Arial,sans-serif; color:var(--ink-soft); font-size:14.5px; margin:0 0 18px; }
+/* --- feedback после каждой генерации --- */
+#feedbackBox{
+  display:none;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:22px 24px;
+  margin-top:20px;
+}
+.feedback-label{ font-size:16px; margin-bottom:14px; }
+.feedback-options{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.feedback-btn{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:100px;
+  padding:9px 16px;
+  font-size:13.5px;
+  cursor:pointer;
+  color:var(--ink);
+}
+.feedback-btn:hover{ background:var(--paper-dark); }
+.feedback-btn.selected{
+  background:var(--thread);
+  border-color:var(--thread);
+  color:#fff;
+}
+#feedbackEmailRow{
+  display:none;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.feedback-email-hint{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:12.5px;
+  color:var(--ink-soft);
+  margin:0 0 10px;
+  flex-basis:100%;
+}
+#feedbackEmailRow input[type="email"]{
+  flex:1;
+  min-width:200px;
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:14px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--paper);
+  color:var(--ink);
+}
+#feedbackEmailRow input[type="email"]:focus{ outline:2px solid var(--thread); outline-offset:1px; }
+#feedbackThanks{
+  display:none;
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:14px;
+  color:var(--tag);
+  font-weight:700;
+}
+footer{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:12px;
+  color:var(--ink-soft);
+  text-align:center;
+  margin-top:56px;
+  opacity:.7;
+  line-height:1.8;
+}
+footer img{
+  height:22px;
+  width:auto;
+  display:block;
+  margin:0 auto 10px;
+  opacity:.9;
+}
+footer a{
+  color:var(--ink-soft);
+  text-decoration:underline;
+}
+footer a:hover{ color:var(--thread-dark); }
+@media (prefers-reduced-motion: reduce){
+  .btn, .copy-btn{ transition:none; }
+  #loading .dot{ animation:none; }
+  .spinner{ animation:none; }
+}
 </style>
 </head>
 <body>
@@ -426,18 +441,21 @@
     <img src="logo-tag.png" alt="EtsyAI Tool logosu">
   </div>
   <div class="tagline">Etsy liste dönüştürücü</div>
-  <h1 id="headline">Etsy'de satış yapıyorsunuz, ama İngilizce <em>ana diliniz</em> değil mi?</h1>
-  <p class="sub" id="subheadline">Ürününüzü kendi dilinizde anlatın — hazır İngilizce başlık, açıklama ve Etsy için 13 etiket alın. Çeviri yok, prompt yazmak yok, kopyala-yapıştır yok.</p>
 
+  <h1 id="headline">Etsy'de satış yapıyorsunuz, ama İngilizce <em>ana diliniz</em> değil mi?</h1>
+  <p class="sub" id="subheadline">Ürününüzü kendi dilinizde anlatın, Etsy için doğal ve akıcı bir İngilizce metin alın.</p>
+
+  <!-- v3: gerçek, dolu bir örnek — soyut bir cümle değil -->
   <div class="tagcard">
     <div class="tagcard-row">
       <div class="tagcard-col before">
         <div class="tagcard-label">Siz ne yazarsınız</div>
-        <div class="tagcard-text">"ahşap bileklik, el yapımı, düğün hediyesi"</div>
+        <div class="tagcard-text">"El yapımı, ceviz ağacından oyma bir mücevher kutusu. İçi kadife kaplı, kapağında küçük bir çiçek deseni var. Doğum günü hediyesi olarak da satılabilir."</div>
       </div>
       <div class="tagcard-col after">
         <div class="tagcard-label">Siz ne alırsınız</div>
-        <div class="tagcard-text">"Handmade Wooden Bracelet — Rustic Wedding Gift, Natural Boho Jewelry for Her"</div>
+        <div class="tagcard-text">"Handmade Walnut Wood Jewelry Box — Carved Floral Design, Velvet Lined Keepsake Box, Birthday Gift"</div>
+        <div class="tagcard-note">+ anlamını kontrol edebilmeniz için Türkçe çevirisiyle birlikte</div>
       </div>
     </div>
   </div>
@@ -449,7 +467,7 @@
     </div>
     <div class="step">
       <div class="step-num">2</div>
-      <div class="step-text"><strong>Hazır metni alın</strong> — birkaç başlık seçeneği, birkaç açıklama seçeneği ve 13 etiket.</div>
+      <div class="step-text"><strong>Hazır metni alın</strong> — İngilizce başlık, açıklama ve 13 etiket; anlamını kontrol edebilmeniz için Türkçe çevirisiyle birlikte.</div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
@@ -459,6 +477,7 @@
 
   <form id="genForm">
     <label for="rawText">Ürününüzü anlatın — hangi dilde olursa olsun</label>
+    <div class="hint">İpucu: <strong>Ne kadar ayrıntılı yazarsanız, sonuç o kadar iyi olur.</strong> Örneğin yalnızca "ahşap bileklik" yerine, "el yapımı, ceviz ağacından, ayarlanabilir örgü ahşap bileklik" gibi yazın.</div>
     <textarea id="rawText" placeholder="Ürün açıklamanızı buraya kendi dilinizde yazın veya yapıştırın..." required></textarea>
 
     <label for="category" style="margin-top:16px;">Kategori (isteğe bağlı)</label>
@@ -484,20 +503,41 @@
 
   <div id="result">
     <div class="result-card">
-      <div class="result-label">Başlık Seçenekleri</div>
-      <div id="outTitles"></div>
+      <div class="result-label">
+        Başlık
+        <button class="copy-btn" id="copyTitleBtn" type="button">Kopyala</button>
+      </div>
+      <div class="option-text" id="outTitle"></div>
+      <div class="translation-block">
+        <span class="translation-label">Türkçe çeviri (kontrol için)</span>
+        <div class="translation-text" id="outTitleTranslation"></div>
+      </div>
     </div>
+
     <div class="result-card">
-      <div class="result-label">Açıklama Seçenekleri</div>
-      <div id="outDescs"></div>
+      <div class="result-label">
+        Açıklama
+        <button class="copy-btn" id="copyDescBtn" type="button">Kopyala</button>
+      </div>
+      <div class="option-text" id="outDesc"></div>
+      <div class="translation-block">
+        <span class="translation-label">Türkçe çeviri (kontrol için)</span>
+        <div class="translation-text" id="outDescTranslation"></div>
+      </div>
     </div>
+
     <div class="result-card">
       <div class="result-label">
         13 Etiket
         <button class="copy-btn" id="copyAllTags" type="button">Tümünü kopyala</button>
       </div>
       <div class="tags-list" id="outTags"></div>
+      <div class="translation-block">
+        <span class="translation-label">Türkçe çeviri (kontrol için)</span>
+        <div class="tags-list" id="outTagsTranslation"></div>
+      </div>
     </div>
+
     <button class="btn secondary" id="anotherBtn">Başka bir liste dene</button>
   </div>
 
@@ -509,6 +549,7 @@
       <button type="button" class="feedback-btn" data-rating="rewrite">Baştan yazarım</button>
     </div>
     <div id="feedbackEmailRow">
+      <p class="feedback-email-hint">E-postanızı bırakın, ürün güncellemelerinden ve kampanyalardan haberdar olun.</p>
       <input type="email" id="feedbackEmail" placeholder="E-posta (isteğe bağlı)">
       <button type="button" class="btn secondary" id="feedbackSubmit">Gönder</button>
     </div>
