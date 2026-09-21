@@ -3,10 +3,14 @@
  * ---------------------------------------------------------------------
  * ПЛАТФОРМО-НЕЗАВИСИМОЕ ядро. Единственная точка входа для генерации.
  * Ничего не знает про DOM, про Etsy-редактор, про Chrome-расширение.
- * Вход: сырой текст продавца. Выход: {titles, tags, descriptions}.
+ * Вход: сырой текст продавца. Выход: {title, titleTranslation, tags,
+ * tagsTranslation, description, descriptionTranslation}.
  *
- * v2 (сентябрь 2026): вместо одного title/description теперь 3 варианта
- * заголовка и 2 варианта описания — см. promptBuilder.js.
+ * v3 (сентябрь 2026): к каждому полю добавлен перевод на язык
+ * продавца (см. promptBuilder.js v3) — чтобы продавец мог сам
+ * проверить смысл английского текста без похода к переводчику.
+ * Схема результата для 1 заголовка и 1 описания не изменилась —
+ * это уже было так в этой версии кода.
  *
  * Требует Node.js 18+ (глобальный fetch).
  * ---------------------------------------------------------------------
@@ -27,39 +31,31 @@ const MODEL = 'claude-sonnet-4-6';
 // ответа в этом случае гарантирует сам Anthropic API, а не наша просьба.
 const LISTING_TOOL = {
   name: 'submit_listing',
-  description: 'Submit the generated Etsy listing content: 3 title options, 2 description options, and the tags.',
+  description: 'Submit the generated Etsy listing content, in English, plus a translation of each field back into the seller\'s own language so they can verify it themselves.',
   input_schema: {
     type: 'object',
     properties: {
-      titles: {
-        type: 'array',
-        items: { type: 'string' },
-        minItems: 3,
-        maxItems: 3,
-        description: '3 distinct title options (keyword-first, benefit-led, and gift/occasion-led or another distinct angle).',
-      },
+      title: { type: 'string' },
+      titleTranslation: { type: 'string' },
       tags: { type: 'array', items: { type: 'string' } },
-      descriptions: {
-        type: 'array',
-        items: { type: 'string' },
-        minItems: 2,
-        maxItems: 2,
-        description: '2 distinct description options: [0] short/skimmable, [1] fuller/detailed.',
-      },
+      tagsTranslation: { type: 'array', items: { type: 'string' } },
+      description: { type: 'string' },
+      descriptionTranslation: { type: 'string' },
     },
-    required: ['titles', 'tags', 'descriptions'],
+    required: ['title', 'titleTranslation', 'tags', 'tagsTranslation', 'description', 'descriptionTranslation'],
   },
 };
 
 const TAGS_TOOL = {
   name: 'submit_tags',
-  description: 'Submit the revised list of Etsy tags.',
+  description: 'Submit the revised list of Etsy tags, in English, plus their translation into the seller\'s language in the same order.',
   input_schema: {
     type: 'object',
     properties: {
       tags: { type: 'array', items: { type: 'string' } },
+      tagsTranslation: { type: 'array', items: { type: 'string' } },
     },
-    required: ['tags'],
+    required: ['tags', 'tagsTranslation'],
   },
 };
 
@@ -68,7 +64,7 @@ const TAGS_TOOL = {
  * @param {Object} options
  * @param {string} options.apiKey - Anthropic API key (никогда не хранить в коде расширения!)
  * @param {string} [options.marketplace='etsy']
- * @returns {Promise<{titles: string[], tags: string[], descriptions: string[]}>}
+ * @returns {Promise<{title: string, titleTranslation: string, tags: string[], tagsTranslation: string[], description: string, descriptionTranslation: string}>}
  */
 async function generateListing(input, options) {
   const { apiKey, marketplace = 'etsy' } = options;
@@ -76,7 +72,6 @@ async function generateListing(input, options) {
   if (!apiKey) {
     throw new Error('generateListing: apiKey is required (never call this from client-side/extension code directly — go through the backend proxy).');
   }
-
   if (!input || !input.rawText || !input.rawText.trim()) {
     throw new Error('generateListing: input.rawText is required.');
   }
@@ -90,21 +85,29 @@ async function generateListing(input, options) {
   const userPrompt = buildUserPrompt(input);
 
   const parsed = await callClaudeTool(systemPrompt, userPrompt, apiKey, LISTING_TOOL);
-  validateFields(parsed, ['titles', 'tags', 'descriptions']);
+  validateFields(parsed, ['title', 'titleTranslation', 'tags', 'tagsTranslation', 'description', 'descriptionTranslation']);
+  validateTagsAlignment(parsed.tags, parsed.tagsTranslation);
 
   // --- проверка разнообразия тегов в коде (не доверяем модели "посчитать самой") ---
   const violations = findDiversityViolations(parsed.tags);
   if (violations.length > 0) {
     console.warn('[tagDiversity] violations found, attempting one repair pass:', violations);
     try {
-      const repairPrompt = buildTagRepairPrompt(parsed.tags, violations, profile);
+      const repairPrompt = buildTagRepairPrompt(
+        parsed.tags,
+        parsed.tagsTranslation,
+        violations,
+        profile,
+        input.sourceLang
+      );
       const repaired = await callClaudeTool(
         'You are fixing tag diversity in an Etsy listing. Follow the instructions exactly.',
         repairPrompt,
         apiKey,
         TAGS_TOOL
       );
-      validateFields(repaired, ['tags']);
+      validateFields(repaired, ['tags', 'tagsTranslation']);
+      validateTagsAlignment(repaired.tags, repaired.tagsTranslation);
 
       const stillViolating = findDiversityViolations(repaired.tags);
       if (stillViolating.length > 0) {
@@ -112,8 +115,8 @@ async function generateListing(input, options) {
         // из двух результатов, чтобы не тормозить и не тратить лишние токены.
         console.warn('[tagDiversity] still violating after repair, keeping repaired result anyway:', stillViolating);
       }
-
       parsed.tags = repaired.tags;
+      parsed.tagsTranslation = repaired.tagsTranslation;
     } catch (err) {
       // Ремонт не должен ронять весь запрос — если он не удался,
       // отдаём пользователю первоначальный (пусть не идеальный) результат.
@@ -146,9 +149,7 @@ async function callClaudeTool(systemPrompt, userPrompt, apiKey, tool) {
     },
     body: JSON.stringify({
       model: MODEL,
-      // Было 1000 — увеличено, т.к. вывод вырос примерно вдвое
-      // (3 заголовка + 2 описания вместо 1+1).
-      max_tokens: 1500,
+      max_tokens: 1000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
       tools: [tool],
@@ -166,7 +167,6 @@ async function callClaudeTool(systemPrompt, userPrompt, apiKey, tool) {
   if (!toolBlock) {
     throw new Error('generateListing: no tool_use block in Claude response — unexpected response shape.');
   }
-
   return toolBlock.input; // уже настоящий JS-объект, парсинг не нужен
 }
 
@@ -175,17 +175,37 @@ async function callClaudeTool(systemPrompt, userPrompt, apiKey, tool) {
  * @param {string[]} requiredFields
  */
 function validateFields(obj, requiredFields) {
-  // titles/descriptions/tags — все теперь массивы; остальные поля (если
-  // появятся в будущем) по-прежнему проверяются как обычные truthy-значения.
-  const arrayFields = new Set(['tags', 'titles', 'descriptions']);
   for (const field of requiredFields) {
-    const missing = arrayFields.has(field)
-      ? !Array.isArray(obj[field]) || obj[field].length === 0
-      : !obj[field];
+    const isArrayField = field === 'tags' || field === 'tagsTranslation';
+    const missing = isArrayField ? !Array.isArray(obj[field]) : !obj[field];
     if (missing) {
       throw new Error(`generateListing: response missing required field "${field}".`);
     }
   }
+}
+
+/**
+ * tagsTranslation должен быть тем же по длине списком, что и tags,
+ * иначе на фронтенде перевод разъедется с оригинальными тегами по индексу.
+ * Не бросаем ошибку на пустячных расхождениях длины (модель иногда
+ * пропускает один тег) — вместо этого просто выравниваем массив,
+ * дублируя оригинальный тег там, где перевода не хватает, чтобы
+ * не ронять всю генерацию из-за этого частного случая.
+ *
+ * @param {string[]} tags
+ * @param {string[]} tagsTranslation
+ */
+function validateTagsAlignment(tags, tagsTranslation) {
+  if (tagsTranslation.length === tags.length) return;
+
+  console.warn(
+    `[generateListing] tagsTranslation length (${tagsTranslation.length}) doesn't match tags length (${tags.length}) — padding/truncating to align.`
+  );
+
+  while (tagsTranslation.length < tags.length) {
+    tagsTranslation.push(tags[tagsTranslation.length]);
+  }
+  tagsTranslation.length = tags.length;
 }
 
 module.exports = { generateListing };
