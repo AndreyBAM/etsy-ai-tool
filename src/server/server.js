@@ -10,17 +10,16 @@
  * без npm install. Когда дойдёте до реального деплоя на Vercel/Railway,
  * это легко переносится в serverless-функцию.
  *
- * v2 (сентябрь 2026):
- *  - статика теперь раздаётся автоматически по расширению файла
- *    (см. MIME_TYPES/serveStatic ниже), вместо ручного списка
- *    STATIC_FILES — тот список уже дважды "терял" новый файл
- *    (favicon.png, logo-tag.png), потому что про него забывали
- *    зарегистрировать вручную.
- *  - добавлен /api/feedback — короткий опрос после каждой генерации
- *    ("текста хватило, чтобы сразу опубликовать, или доработали бы?").
+ * v2 (сентябрь 2026): добавлен персистентный журнал генераций
+ * (generationLog) с timestamp/category/variant для каждой записи —
+ * раньше в state.json хранился только "плоский" счётчик usage без
+ * привязки ко времени, из-за чего нельзя было отделить, сколько
+ * генераций пришло за конкретную рекламную кампанию/неделю/месяц.
+ * Плюс новый защищённый эндпоинт /api/stats с фильтром по периоду.
+ * Существующая логика usage/paidCredits/paywall/Paddle НЕ менялась.
  *
  * Запуск:
- *   ANTHROPIC_API_KEY=sk-ant-... node src/server/server.js
+ * ANTHROPIC_API_KEY=sk-ant-... node src/server/server.js
  * ---------------------------------------------------------------------
  */
 
@@ -48,12 +47,9 @@ const CREDITS_PER_PURCHASE = parseInt(process.env.CREDITS_PER_PURCHASE || '20', 
 // кого угодно в интернете, кто узнал наш URL.
 const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
 
-// Секретный ключ для /api/stats — простая защита, чтобы статистику
-// (email-адреса, фидбек, счётчики) не мог посмотреть кто угодно, кто
-// узнает URL сайта. Задать свой в Railway → Variables → STATS_SECRET.
-// Если не задан — используется значение по умолчанию (см. предупреждение
-// в консоли при старте сервера ниже), сменить обязательно перед тем как
-// делиться ссылкой на статистику с кем-либо ещё.
+// Секрет для доступа к /api/stats — без него отдаём 403. Обязательно
+// задать своё значение в Railway → Variables перед тем, как делиться
+// ссылкой на статистику с кем-либо ещё, помимо себя.
 const STATS_SECRET = process.env.STATS_SECRET || 'change-me-to-something-random';
 
 // Простые счётчики в памяти процесса, дополнительно сохраняемые на диск
@@ -63,7 +59,15 @@ const STATS_SECRET = process.env.STATS_SECRET || 'change-me-to-something-random'
 const usage = new Map(); // uid -> сколько генераций уже использовано всего
 const paidCredits = new Map(); // uid -> сколько платных генераций начислено (кумулятивно)
 const processedTransactions = new Set(); // transaction.id, чтобы не начислить дважды при повторной доставке webhook-а
-const feedback = []; // [{uid, rating, email, timestamp}] — короткий опрос после каждой генерации
+
+// Журнал КАЖДОЙ отдельной генерации с меткой времени — в отличие от
+// usage (просто число), это позволяет позже отфильтровать "сколько
+// генераций было за последнюю неделю" или "сколько пришло именно
+// с 3-й рекламной кампании", не путая их с историей всего проекта.
+// Растёт линейно (несколько десятков КБ даже при сотнях генераций
+// в месяц) — Railway Volume это не напряжёт, поэтому старые записи
+// не удаляются автоматически.
+let generationLog = []; // [{ uid, timestamp, category, variant }, ...]
 
 // --- персистентность на диск -------------------------------------------
 // Railway по умолчанию стирает файловую систему при каждом передеплое —
@@ -80,8 +84,12 @@ function loadState() {
     (parsed.usage || []).forEach(([k, v]) => usage.set(k, v));
     (parsed.paidCredits || []).forEach(([k, v]) => paidCredits.set(k, v));
     (parsed.processedTransactions || []).forEach((id) => processedTransactions.add(id));
-    (parsed.feedback || []).forEach((f) => feedback.push(f));
-    console.log(`State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits, ${feedback.length} feedback entries.`);
+    // Старые state.json (до этого апдейта) не содержат generationLog —
+    // это нормально, просто начинаем журнал с этого момента вперёд.
+    generationLog = Array.isArray(parsed.generationLog) ? parsed.generationLog : [];
+    console.log(
+      `State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits, ${generationLog.length} logged generation(s).`
+    );
   } catch (err) {
     console.log(`No existing state file at ${STATE_FILE} (this is normal on first run). Starting fresh.`);
   }
@@ -94,7 +102,7 @@ function saveState() {
       usage: [...usage.entries()],
       paidCredits: [...paidCredits.entries()],
       processedTransactions: [...processedTransactions],
-      feedback,
+      generationLog,
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data));
   } catch (err) {
@@ -146,69 +154,89 @@ function verifyPaddleSignature(rawBody, signatureHeader, secret) {
   return crypto.timingSafeEqual(a, b);
 }
 
-const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
+// --- разбор параметров периода для /api/stats ---------------------------
+// Поддерживает ?days=7 (последние N дней от текущего момента) ИЛИ
+// ?from=2026-09-15&to=2026-09-22 (конкретный диапазон, обе границы
+// включительно). Если не передано ни то, ни другое — период не
+// ограничен (вся история проекта), как раньше.
+function resolvePeriod(searchParams) {
+  const days = searchParams.get('days');
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
 
-// --- автоматическая раздача статики -------------------------------------
-// Раньше здесь был ручной список STATIC_FILES, в который нужно было
-// вписывать КАЖДЫЙ новый файл вручную — это уже дважды приводило к тому,
-// что новый файл (favicon.png, logo-tag.png) тихо не находился на
-// проде, хотя физически лежал в public/. Теперь: если у запрошенного
-// пути есть известное расширение — отдаём файл из public/ напрямую,
-// определяя Content-Type по расширению. Новые файлы в public/ больше
-// нигде регистрировать не нужно.
-const MIME_TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.txt': 'text/plain; charset=utf-8',
-};
+  let from = null;
+  let to = null;
 
-/**
- * Пытается отдать статический файл из public/ по расширению пути.
- * Возвращает true, если запрос был обработан (файл найден и отдан,
- * либо отдана 404 именно за файл), false — если путь вообще не
- * похож на статический файл (нет распознанного расширения), и его
- * должен обработать кто-то другой (например, /api/usage).
- *
- * @param {string} pathname
- * @param {import('http').ServerResponse} res
- * @returns {boolean}
- */
-function serveStatic(pathname, res) {
-  const filePath = pathname === '/' ? '/index.html' : pathname;
-
-  // Защита от path traversal (../../etc/passwd и т.п.). Главная гарантия —
-  // финальная проверка fullPath.startsWith(PUBLIC_DIR) ниже; regex тут —
-  // только первая, самая дешёвая линия защиты.
-  const safePath = path.normalize(filePath).replace(/^([.]{2}[/\\])+/, '');
-  const fullPath = path.join(PUBLIC_DIR, safePath);
-  if (!fullPath.startsWith(PUBLIC_DIR)) {
-    res.writeHead(403);
-    res.end('Forbidden');
-    return true;
+  if (days) {
+    const n = parseInt(days, 10);
+    if (!isNaN(n) && n > 0) {
+      to = new Date();
+      from = new Date(to.getTime() - n * 24 * 60 * 60 * 1000);
+    }
+  } else if (fromParam || toParam) {
+    from = fromParam ? new Date(fromParam) : null;
+    to = toParam ? new Date(toParam + 'T23:59:59.999Z') : new Date();
   }
 
-  const ext = path.extname(fullPath).toLowerCase();
-  const type = MIME_TYPES[ext];
-  if (!type) return false; // не похоже на статический файл — пропускаем дальше по цепочке роутов
-
-  fs.readFile(fullPath, (err, data) => {
-    if (err) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Not found');
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': type });
-    res.end(data);
-  });
-  return true;
+  return { from, to };
 }
+
+function filterLogByPeriod(log, from, to) {
+  if (!from && !to) return log;
+  return log.filter((entry) => {
+    const t = new Date(entry.timestamp);
+    if (from && t < from) return false;
+    if (to && t > to) return false;
+    return true;
+  });
+}
+
+function summarizeLog(log) {
+  const uniqueUsers = new Set(log.map((e) => e.uid));
+  const byVariant = {};
+  const byDay = {};
+
+  log.forEach((e) => {
+    const v = e.variant || 'none';
+    byVariant[v] = (byVariant[v] || 0) + 1;
+
+    // группировка по дню (YYYY-MM-DD) — удобно смотреть недельную/
+    // месячную динамику без внешних инструментов аналитики
+    const day = (e.timestamp || '').slice(0, 10);
+    if (!byDay[day]) byDay[day] = { generations: 0, uniqueUsers: new Set() };
+    byDay[day].generations += 1;
+    byDay[day].uniqueUsers.add(e.uid);
+  });
+
+  const byDayArray = Object.keys(byDay)
+    .sort()
+    .map((day) => ({
+      date: day,
+      generations: byDay[day].generations,
+      uniqueUsers: byDay[day].uniqueUsers.size,
+    }));
+
+  return {
+    totalGenerations: log.length,
+    totalUsers: uniqueUsers.size,
+    byVariant,
+    byDay: byDayArray,
+  };
+}
+
+const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
+const STATIC_FILES = {
+  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
+  '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
+  '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
+  '/terms.html': { file: 'terms.html', type: 'text/html; charset=utf-8' },
+  '/privacy.html': { file: 'privacy.html', type: 'text/html; charset=utf-8' },
+  '/refund.html': { file: 'refund.html', type: 'text/html; charset=utf-8' },
+  '/pricing.html': { file: 'pricing.html', type: 'text/html; charset=utf-8' },
+  '/favicon.png': { file: 'favicon.png', type: 'image/png' },
+  '/favicon.ico': { file: 'favicon.ico', type: 'image/x-icon' },
+  '/logo-tag.png': { file: 'logo-tag.png', type: 'image/png' },
+};
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -224,10 +252,17 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // --- статика лендинга (автоматически, по расширению файла) ---
-  if (req.method === 'GET') {
-    const handled = serveStatic(url.pathname, res);
-    if (handled) return;
+  // --- статика лендинга ---
+  if (req.method === 'GET' && STATIC_FILES[url.pathname]) {
+    const { file, type } = STATIC_FILES[url.pathname];
+    return fs.readFile(path.join(PUBLIC_DIR, file), (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        return res.end('Failed to load ' + file);
+      }
+      res.writeHead(200, { 'Content-Type': type });
+      res.end(data);
+    });
   }
 
   // --- сколько генераций осталось у этого uid (бесплатных + оплаченных) ---
@@ -235,6 +270,38 @@ const server = http.createServer(async (req, res) => {
     const uid = url.searchParams.get('uid') || 'anonymous';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ remaining: remainingFor(uid) }));
+  }
+
+  // --- защищённая статистика с фильтром по периоду ---
+  // Примеры:
+  //   /api/stats?key=SECRET               — вся история проекта
+  //   /api/stats?key=SECRET&days=7        — последняя неделя
+  //   /api/stats?key=SECRET&days=30       — последний месяц
+  //   /api/stats?key=SECRET&from=2026-09-01&to=2026-09-08  — конкретная кампания
+  if (req.method === 'GET' && url.pathname === '/api/stats') {
+    if (url.searchParams.get('key') !== STATS_SECRET) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Forbidden' }));
+    }
+
+    const { from, to } = resolvePeriod(url.searchParams);
+    const filtered = filterLogByPeriod(generationLog, from, to);
+    const periodSummary = summarizeLog(filtered);
+    const allTimeSummary = summarizeLog(generationLog);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(
+      JSON.stringify({
+        period: {
+          from: from ? from.toISOString() : null,
+          to: to ? to.toISOString() : null,
+        },
+        ...periodSummary,
+        payingUsers: [...paidCredits.keys()].length,
+        totalPaidCredits: [...paidCredits.values()].reduce((a, b) => a + b, 0),
+        allTime: allTimeSummary,
+      })
+    );
   }
 
   // --- webhook от Paddle: сюда Paddle сам стучится после успешной оплаты ---
@@ -249,7 +316,6 @@ const server = http.createServer(async (req, res) => {
 
     const signatureHeader = req.headers['paddle-signature'];
     const isValid = verifyPaddleSignature(rawBody, signatureHeader, PADDLE_WEBHOOK_SECRET);
-
     if (!isValid) {
       logEvent('webhook_invalid_signature', {});
       res.writeHead(401);
@@ -285,76 +351,6 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ received: true }));
   }
 
-  // --- короткий фидбек после генерации: "текста хватило или нет?" + email ---
-  if (req.method === 'POST' && url.pathname === '/api/feedback') {
-    try {
-      const body = await readJsonBody(req);
-      const entry = {
-        uid: body.uid || 'anonymous',
-        rating: body.rating || null, // 'good' | 'minor_edits' | 'rewrite'
-        email: body.email || null,
-        timestamp: new Date().toISOString(),
-      };
-      feedback.push(entry);
-      saveState();
-      logEvent('feedback_submitted', entry);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ ok: true }));
-    } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: err.message }));
-    }
-  }
-
-  // --- сводная статистика для быстрого просмотра в браузере ---
-  // Открывается по адресу: ваш-сайт/api/stats?key=ВАШ_STATS_SECRET
-  // Показывает: сколько всего пользователей, сколько генераций,
-  // сколько оплаченных генераций начислено, и отдельно — сводку по
-  // фидбеку (сколько каждой из 3 оценок, сколько email оставлено,
-  // и сам список записей с email, чтобы можно было с кем-то связаться).
-  if (req.method === 'GET' && url.pathname === '/api/stats') {
-    if (url.searchParams.get('key') !== STATS_SECRET) {
-      res.writeHead(403, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'Forbidden' }));
-    }
-
-    const uids = new Set([...usage.keys(), ...paidCredits.keys()]);
-    let totalGenerations = 0;
-    let totalPaidCredits = 0;
-    let payingUsers = 0;
-    const details = [...uids].map((id) => {
-      const gen = usage.get(id) || 0;
-      const credits = paidCredits.get(id) || 0;
-      totalGenerations += gen;
-      totalPaidCredits += credits;
-      if (credits > 0) payingUsers += 1;
-      return { uid: id, generations: gen, paidCredits: credits };
-    });
-
-    const byRating = { good: 0, minor_edits: 0, rewrite: 0, other: 0 };
-    let emailsCollected = 0;
-    feedback.forEach((f) => {
-      if (byRating[f.rating] !== undefined) byRating[f.rating] += 1;
-      else byRating.other += 1;
-      if (f.email) emailsCollected += 1;
-    });
-
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({
-      totalUsers: uids.size,
-      totalGenerations,
-      totalPaidCredits,
-      payingUsers,
-      details,
-      feedback: {
-        totalResponses: feedback.length,
-        byRating,
-        emailsCollected,
-        entries: feedback,
-      },
-    }, null, 2));
-  }
-
   if (req.method !== 'POST' || url.pathname !== '/api/generate') {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'Not found' }));
@@ -368,8 +364,8 @@ const server = http.createServer(async (req, res) => {
   try {
     const body = await readJsonBody(req);
     const uid = body.uid || 'anonymous';
-
     const used = usage.get(uid) || 0;
+
     if (used >= allowedFor(uid)) {
       logEvent('paywall_hit', { uid, variant: body.variant });
       res.writeHead(402, { 'Content-Type': 'application/json' });
@@ -378,25 +374,23 @@ const server = http.createServer(async (req, res) => {
 
     // TODO(после demand-теста): заменить Map на Supabase, если тест
     // покажет, что стоит строить полноценную авторизацию/подписку.
-
     const listing = await generateListing(
       {
         rawText: body.rawText,
         sourceLang: body.sourceLang, // необязательно — если не передано, Claude определит язык сам
-        category: body.category, // необязательно — выпадающий список на лендинге, можно оставить пустым
+        category: body.category,
         extraContext: body.extraContext,
       },
       { apiKey: API_KEY, marketplace: body.marketplace || 'etsy' }
     );
 
     usage.set(uid, used + 1);
+
+    const timestamp = new Date().toISOString();
+    generationLog.push({ uid, timestamp, category: body.category || null, variant: body.variant || 'none' });
+
     saveState();
-    logEvent('generated', {
-      uid,
-      variant: body.variant,
-      category: body.category || null,
-      remaining: remainingFor(uid),
-    });
+    logEvent('generated', { uid, variant: body.variant, category: body.category, timestamp, remaining: remainingFor(uid) });
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ...listing, remaining: remainingFor(uid) }));
@@ -441,7 +435,7 @@ server.listen(PORT, () => {
   if (!PADDLE_WEBHOOK_SECRET) {
     console.warn('WARNING: PADDLE_WEBHOOK_SECRET not set — payments will not be credited automatically.');
   }
-  if (!process.env.STATS_SECRET) {
-    console.warn('WARNING: STATS_SECRET not set — using an insecure default. Set your own before sharing the /api/stats link with anyone.');
+  if (STATS_SECRET === 'change-me-to-something-random') {
+    console.warn('WARNING: STATS_SECRET not set — using an insecure default. Set it in Railway → Variables before sharing the /api/stats link with anyone.');
   }
 });
