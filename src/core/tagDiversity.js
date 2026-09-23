@@ -10,6 +10,16 @@
  *
  * Решение: считать вхождения в коде, где это математически точно,
  * а не полагаться на то, что модель "сама сосчитает в уме".
+ *
+ * v3.1 (сентябрь 2026) — добавлен второй, независимый от промпта
+ * детерминированный фильтр: даже после явного запрета в промпте
+ * (правила 2c/6 в promptBuilder.js) модель на практике всё равно
+ * иногда добавляет в ТЕГИ более специфичный подтип/стиль, которого
+ * продавец не называл (проверено на реальных генерациях: "floating
+ * shelf", "crossbody", "minimalist" проскакивали в тегах даже когда
+ * их не было ни в title, ни в description). Правило в промпте ловит
+ * это в основном тексте надёжно, но не в списке из 13 тегов — поэтому
+ * здесь добавлена подстраховка в коде, а не ещё один вызов модели.
  * ---------------------------------------------------------------------
  */
 
@@ -74,4 +84,107 @@ function findDiversityViolations(tags, maxOccurrences = 2) {
   return violations.sort((a, b) => b.count - a.count);
 }
 
-module.exports = { findDiversityViolations, countKeywordSpread, stem };
+// ---------------------------------------------------------------------
+// Фильтр выдуманных уточнений в тегах (независимая подстраховка к
+// правилам 2c/6 в promptBuilder.js — см. комментарий в шапке файла)
+// ---------------------------------------------------------------------
+
+// Слово в теге -> стем(ы), по которым проверяем, было ли оно (или его
+// форма) в исходном тексте продавца. Если стема нет в исходнике — тег
+// считается выдумкой и выбрасывается. Список составлен по конкретным
+// паттернам, реально пойманным на тестовых генерациях.
+const FABRICATION_BLOCKLIST = {
+  floating: ['floating'],
+  tote: ['tote'],
+  purse: ['purse'],
+  crossbody: ['crossbody', 'cross-body', 'cross body'],
+  minimalist: ['minimalist', 'minimalism'],
+  rustic: ['rustic'],
+  trailing: ['trailing'],
+  artisan: ['artisan'],
+  luxury: ['luxury', 'luxurious'],
+  premium: ['premium'],
+  engraved: ['engrav'], // ловит engraved/engraving
+  organizer: ['organiz'], // ловит organizer/organizing/organised
+  walnut: ['walnut'],
+};
+
+/**
+ * Проверяет, есть ли хотя бы одна из стем в исходном тексте продавца
+ * (простое includes() по нижнему регистру — умышленно грубо, чтобы не
+ * зависеть от токенизации/языка исходника).
+ * @param {string} sourceTextLower
+ * @param {string[]} stems
+ */
+function isPresentInSource(sourceTextLower, stems) {
+  return stems.some((s) => sourceTextLower.includes(s.toLowerCase()));
+}
+
+/**
+ * Фильтрует пары (tag, tagTranslation) от выдуманных уточнений.
+ * Работает по индексам ОБОИХ массивов одновременно, чтобы перевод не
+ * "уехал" от своего тега после удаления.
+ *
+ * @param {string[]} tags
+ * @param {string[]} tagsTranslation - того же порядка/длины, что tags
+ * @param {string} sourceText - исходный текст продавца (на его языке)
+ * @returns {{tags: string[], tagsTranslation: string[], removed: string[]}}
+ */
+function filterFabricatedTagPairs(tags, tagsTranslation, sourceText) {
+  const sourceLower = (sourceText || '').toLowerCase();
+  const keptTags = [];
+  const keptTranslations = [];
+  const removed = [];
+
+  tags.forEach((tag, i) => {
+    const tagLower = tag.toLowerCase();
+    let fabricated = false;
+
+    for (const stems of Object.values(FABRICATION_BLOCKLIST)) {
+      const tagContainsWord = stems.some((s) => tagLower.includes(s));
+      if (tagContainsWord && !isPresentInSource(sourceLower, stems)) {
+        fabricated = true;
+        break;
+      }
+    }
+
+    if (fabricated) {
+      removed.push(tag);
+    } else {
+      keptTags.push(tag);
+      keptTranslations.push(tagsTranslation ? tagsTranslation[i] : undefined);
+    }
+  });
+
+  return { tags: keptTags, tagsTranslation: keptTranslations, removed };
+}
+
+// Фразы-сравнения с масс-продакшеном — тоже выдумка, если продавец не
+// говорил ничего подобного явно. Пока только для лога (см. комментарий
+// в generateListing.js) — аккуратно вырезать кусок готового предложения
+// сложнее, чем выбросить тег целиком, поэтому основная защита остаётся
+// на стороне промпта (правило 2b/6), а это — сигнал для мониторинга.
+const SUPERIORITY_PHRASES = [
+  'mass-produced',
+  'mass produced',
+  'unlike factory',
+  "you won't find in",
+  'you will not find in',
+];
+
+/**
+ * @param {string} text
+ * @returns {boolean}
+ */
+function containsSuperiorityClaim(text) {
+  const lower = (text || '').toLowerCase();
+  return SUPERIORITY_PHRASES.some((phrase) => lower.includes(phrase));
+}
+
+module.exports = {
+  findDiversityViolations,
+  countKeywordSpread,
+  stem,
+  filterFabricatedTagPairs,
+  containsSuperiorityClaim,
+};
