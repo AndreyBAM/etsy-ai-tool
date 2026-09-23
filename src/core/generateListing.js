@@ -12,13 +12,27 @@
  * Схема результата для 1 заголовка и 1 описания не изменилась —
  * это уже было так в этой версии кода.
  *
+ * v3.1 (сентябрь 2026): добавлен пост-фильтр тегов в коде
+ * (tagDiversity.filterFabricatedTagPairs) — независимая от промпта
+ * подстраховка против конкретных выдуманных уточнений, которые
+ * проскакивали именно в тегах на реальных тестах (floating, tote,
+ * crossbody, minimalist и т.п.), даже когда правила 2c/6 в промпте
+ * уже ловили то же самое в title/description. Работает ПОСЛЕ ответа
+ * модели, без дополнительного API-вызова — не влияет на цену/время
+ * генерации. Плюс лог (не блокировка) на фразы про масс-продакшн в
+ * description — для мониторинга, помогает ли правило 2b/6 в промпте.
+ *
  * Требует Node.js 18+ (глобальный fetch).
  * ---------------------------------------------------------------------
  */
 
 const { buildSystemPrompt, buildUserPrompt, buildTagRepairPrompt } = require('./promptBuilder');
 const { marketplaceProfiles } = require('./marketplaceProfiles');
-const { findDiversityViolations } = require('./tagDiversity');
+const {
+  findDiversityViolations,
+  filterFabricatedTagPairs,
+  containsSuperiorityClaim,
+} = require('./tagDiversity');
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-6';
@@ -122,6 +136,27 @@ async function generateListing(input, options) {
       // отдаём пользователю первоначальный (пусть не идеальный) результат.
       console.error('[tagDiversity] repair pass failed, returning original tags:', err.message);
     }
+  }
+
+  // --- пост-фильтр выдуманных уточнений в тегах (код, без доп. API-вызова) ---
+  // Работает ПОСЛЕ diversity-репэйра выше, на финальном списке тегов —
+  // чтобы репэйр-проход (который тоже может добавить новый выдуманный
+  // тег взамен убранного) тоже прошёл через фильтр.
+  const { tags: cleanTags, tagsTranslation: cleanTagsTranslation, removed } =
+    filterFabricatedTagPairs(parsed.tags, parsed.tagsTranslation, input.rawText);
+
+  if (removed.length > 0) {
+    console.warn('[fabricationFilter] removed fabricated tags:', removed);
+  }
+  parsed.tags = cleanTags;
+  parsed.tagsTranslation = cleanTagsTranslation;
+
+  // --- лог (не блокировка) фраз про превосходство над масс-продакшном ---
+  // Description — цельное предложение, аккуратно вырезать фразу из него
+  // рискованно (можно сломать грамматику); полагаемся на промпт (2b/6),
+  // здесь только считаем, как часто он всё же не срабатывает.
+  if (containsSuperiorityClaim(parsed.description)) {
+    console.warn('[fabricationFilter] superiority claim detected in description:', parsed.description);
   }
 
   return parsed;
