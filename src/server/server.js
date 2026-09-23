@@ -69,6 +69,13 @@ const processedTransactions = new Set(); // transaction.id, чтобы не на
 // не удаляются автоматически.
 let generationLog = []; // [{ uid, timestamp, category, variant }, ...]
 
+// Журнал отзывов с формы обратной связи после генерации (кнопки
+// "Evet yeterli" / "Biraz düzenlerim" / "Baştan yazarım" + опциональный
+// email). Раньше такого массива в коде не было вообще — фронтенд уже
+// отправлял POST на /api/feedback, но на сервере не было обработчика,
+// поэтому email реально нигде не сохранялся. Теперь сохраняется.
+let feedbackLog = []; // [{ uid, rating, email, timestamp }, ...]
+
 // --- персистентность на диск -------------------------------------------
 // Railway по умолчанию стирает файловую систему при каждом передеплое —
 // ЗА ИСКЛЮЧЕНИЕМ директории, примонтированной как persistent Volume.
@@ -87,8 +94,9 @@ function loadState() {
     // Старые state.json (до этого апдейта) не содержат generationLog —
     // это нормально, просто начинаем журнал с этого момента вперёд.
     generationLog = Array.isArray(parsed.generationLog) ? parsed.generationLog : [];
+    feedbackLog = Array.isArray(parsed.feedbackLog) ? parsed.feedbackLog : [];
     console.log(
-      `State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits, ${generationLog.length} logged generation(s).`
+      `State loaded from ${STATE_FILE}: ${usage.size} uid(s), ${paidCredits.size} with credits, ${generationLog.length} logged generation(s), ${feedbackLog.length} feedback entr(ies).`
     );
   } catch (err) {
     console.log(`No existing state file at ${STATE_FILE} (this is normal on first run). Starting fresh.`);
@@ -103,6 +111,7 @@ function saveState() {
       paidCredits: [...paidCredits.entries()],
       processedTransactions: [...processedTransactions],
       generationLog,
+      feedbackLog,
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data));
   } catch (err) {
@@ -224,6 +233,24 @@ function summarizeLog(log) {
   };
 }
 
+// Аналог summarizeLog, но для отзывов с формы обратной связи: считает
+// разбивку по оценке (good/minor_edits/rewrite) и отдаёт сами записи
+// (с email, если продавец его оставил) для ручного просмотра.
+function summarizeFeedback(log) {
+  const byRating = { good: 0, minor_edits: 0, rewrite: 0, other: 0 };
+  log.forEach((e) => {
+    const key = byRating.hasOwnProperty(e.rating) ? e.rating : 'other';
+    byRating[key] += 1;
+  });
+
+  return {
+    totalResponses: log.length,
+    byRating,
+    emailsCollected: log.filter((e) => e.email).length,
+    entries: [...log].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
+  };
+}
+
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const STATIC_FILES = {
   '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
@@ -285,23 +312,66 @@ const server = http.createServer(async (req, res) => {
     }
 
     const { from, to } = resolvePeriod(url.searchParams);
-    const filtered = filterLogByPeriod(generationLog, from, to);
-    const periodSummary = summarizeLog(filtered);
+
+    const filteredGenerations = filterLogByPeriod(generationLog, from, to);
+    const periodSummary = summarizeLog(filteredGenerations);
     const allTimeSummary = summarizeLog(generationLog);
+
+    const filteredFeedback = filterLogByPeriod(feedbackLog, from, to);
+    const feedbackSummary = summarizeFeedback(filteredFeedback);
+
+    // Сырые записи каждой генерации (не только агрегаты по дням) —
+    // видно точное время конкретной генерации, отсортировано от
+    // старых к новым, чтобы удобно читать как ленту событий.
+    const generationsSorted = [...filteredGenerations].sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+    );
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(
-      JSON.stringify({
-        period: {
-          from: from ? from.toISOString() : null,
-          to: to ? to.toISOString() : null,
+      // 2 — отступ в пробелах: без него весь ответ выводится одной
+      // сплошной строкой, что тяжело читать глазами прямо в браузере.
+      JSON.stringify(
+        {
+          period: {
+            from: from ? from.toISOString() : null,
+            to: to ? to.toISOString() : null,
+          },
+          ...periodSummary,
+          generations: generationsSorted,
+          payingUsers: [...paidCredits.keys()].length,
+          totalPaidCredits: [...paidCredits.values()].reduce((a, b) => a + b, 0),
+          feedback: feedbackSummary,
+          allTime: allTimeSummary,
         },
-        ...periodSummary,
-        payingUsers: [...paidCredits.keys()].length,
-        totalPaidCredits: [...paidCredits.values()].reduce((a, b) => a + b, 0),
-        allTime: allTimeSummary,
-      })
+        null,
+        2
+      )
     );
+  }
+
+  // --- фидбек после генерации: оценка + опциональный email ---
+  // Раньше форма на фронтенде уже отправляла сюда POST, но этого
+  // обработчика в коде не было вообще — запрос просто улетал в 404,
+  // и email нигде не сохранялся. Теперь пишется в feedbackLog.
+  if (req.method === 'POST' && url.pathname === '/api/feedback') {
+    try {
+      const body = await readJsonBody(req);
+      const uid = body.uid || 'anonymous';
+      const allowedRatings = ['good', 'minor_edits', 'rewrite'];
+      const rating = allowedRatings.includes(body.rating) ? body.rating : 'other';
+      const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;
+
+      feedbackLog.push({ uid, rating, email, timestamp: new Date().toISOString() });
+      saveState();
+      logEvent('feedback_submitted', { uid, rating, email });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: err.message }));
+    }
   }
 
   // --- webhook от Paddle: сюда Paddle сам стучится после успешной оплаты ---
